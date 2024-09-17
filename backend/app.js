@@ -16,12 +16,13 @@ app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
 app.use(cors);
 
-socketIO.on("connection", require("./routes/socketRouter"));
+socketIO.on("connection", require("./routes/socketRouter").socketConnection);
 
 // app.use("/api/auth", require("./routes/authRouter"));
 // app.use("/api/messages", require("./routes/messagesRouter"));
 // app.use("/api/users", require("./routes/usersRouter"));
 app.use("/api/lobby", require("./routes/lobbyRouter"));
+app.use("/api/files", require("./routes/fileRouter"));
 // app.use("/api/profile", require("./routes/profileRouter"));
 // app.use("/api/image", require("./routes/imageRoutes"));
 
