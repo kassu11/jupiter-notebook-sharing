@@ -1,0 +1,40 @@
+POST http://localhost:4001/auth/login
+Content-Type: application/json
+
+{
+	"userTag": "authTest",
+	"password": "123456789!"
+}
+
+###
+
+POST http://localhost:4001/auth/refresh
+Content-Type: application/json
+
+{
+	"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOiI2NTY0YjBjOTQ4OTVjMjI3ZTQ3MTg2MTIiLCJ0eXBlIjoicmVmcmVzaCIsInVzZXJUYWciOiJhdXRoVGVzdCIsInVzZXJuYW1lIjoiYXV0aFRlc3QiLCJpYXQiOjE3MDExNTM0NDF9.ibWV0HCd_Z7B55ZIjo0xiOEmKwCDd5kN8Kq7b9084aE"
+}
+
+###
+
+POST http://localhost:4001/auth/update
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOiI2NTYzNjVmMjMxYjkxYjFhZDYzMWRmZjciLCJ0eXBlIjoibG9naW4iLCJ1c2VyVGFnIjoiYXV0aFRlc3QiLCJ1c2VybmFtZSI6ImF1dGhUZXN0IiwiaWF0IjoxNzAxMDIyMjMyLCJleHAiOjE3MDEwMjIyNTJ9.sxooCYQZgNQ_hoPJMyjbzwdus73oTjwknb9Ad7DgHyI
+
+###
+
+POST http://localhost:4001/auth/logout
+Content-Type: application/json
+
+{
+	"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOiI2NTYxMTY5YjdmZTdmMDBiZDU2MzRlZTUiLCJ0eXBlIjoicmVmcmVzaCIsInVzZXJUYWciOiJhdXRoVGVzdCIsImlhdCI6MTcwMDk5Nzg3OX0.9qXeEeI8Ej_RNigKSRJCxO8tDcuy2clIULMjOSfYeTY"
+}
+
+
+###
+
+POST http://localhost:4000/users/getSensitiveData
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyaWQiOiI2NTYxMTY5YjdmZTdmMDBiZDU2MzRlZTUiLCJ0eXBlIjoicmVmcmVzaCIsInVzZXJUYWciOiJhdXRoVGVzdCIsImlhdCI6MTcwMDk5Nzg4OCwiZXhwIjoxNzAwOTk3OTA4fQ.Fcs6UWQd3a_hn51pVmwFXIp1Nr-LygWfWMjvsZHrbWw
+
+

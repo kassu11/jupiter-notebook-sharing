@@ -1,0 +1,24 @@
+POST http://localhost:4000/messages/groups
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2NTY0YjBjOTQ4OTVjMjI3ZTQ3MTg2MTIiLCJ0eXBlIjoibG9naW4iLCJpYXQiOjE3MDI0NzMxNDcsImV4cCI6MTcwMjQ3MzE2N30.CqcJoGAtYACfWaoVk-j5BgXpg36m9dEFj1T_VivPE5Q
+
+{
+	"participants": [
+		"6564b0c94895c227e4718612",
+		"6565cb8664271267c2a855bb",
+		"65660422c753a9e2bbe5e6ef"
+	]
+}
+
+###
+
+POST http://localhost:4000/messages
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2NTY0YjBjOTQ4OTVjMjI3ZTQ3MTg2MTIiLCJ0eXBlIjoibG9naW4iLCJ1c2VyVGFnIjoiYXV0aFRlc3QiLCJ1c2VybmFtZSI6ImF1dGhUZXN0IiwiaWF0IjoxNzAxNzAwNzcwLCJleHAiOjE3MDE3MDA3OTB9.yDzXuh8ldHq7jmQFspbunm8Csqvw48P09k59J32oVvM
+
+{
+	"groupId": "656de3d982d381ab40c6dcbc",
+	"text": "Hello World!!!!"
+}
+
+###

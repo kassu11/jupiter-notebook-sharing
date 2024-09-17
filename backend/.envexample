@@ -1,0 +1,7 @@
+MONGO_URI=production_uri
+TEST_MONGO_URI=test_uri
+PORT=server_port
+ACCESS_TOKEN_SECRET=secret_1
+REFRESH_TOKEN_SECRET=secret_2
+NODE_ENV="dev"
+CLIENT_ID=imgur_api_client_id

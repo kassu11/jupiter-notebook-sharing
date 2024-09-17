@@ -1,0 +1,28 @@
+.content {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 10px;
+}
+
+#fileTree {
+    position: relative;
+    border: 2px solid red;
+    word-break: break-all;
+
+    .file {
+        cursor: pointer;
+        background: blue;
+        color: white;
+    }
+}
+
+#notebook {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    pre {
+        border: 2px solid green;
+        padding: 10px;
+    }
+}
