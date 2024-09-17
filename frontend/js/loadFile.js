@@ -1,7 +1,11 @@
+import socketIO from "socket.io-client";
 const loadButton = document.querySelector("#openProjectFolder");
-const fileTree = document.querySelector("#fileTree")
-const notebook = document.querySelector("#notebook")
-loadButton.addEventListener("click", loadProjectFolder)
+const fileTree = document.querySelector("#fileTree");
+const notebook = document.querySelector("#notebook");
+const host = document.querySelector("#host");
+const join = document.querySelector("#join");
+
+loadButton.addEventListener("click", loadProjectFolder);
 async function loadProjectFolder() {
     fileTree.textContent = "";
     const reponse = await showDirectoryPicker({ id: "jupiter", mode: "readwrite" });
@@ -69,3 +73,14 @@ async function clickFile(file) {
         console.log(block);
     }
 }
+
+const socket = socketIO("http://localhost:4000/", {
+    auth: (token) => {
+        token({token: "test"});
+    }
+});
+
+
+socket.on("post/10", e => {
+    console.log("Socket message", e)
+})

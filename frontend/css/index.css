@@ -1,1 +1,0 @@
-.content{display:grid;grid-template-columns:300px 1fr;gap:10px}#fileTree{position:relative;border:2px solid red;word-break:break-all}#fileTree .file{cursor:pointer;background:blue;color:#fff}#notebook{display:flex;flex-direction:column;gap:10px}#notebook pre{border:2px solid green;padding:10px}/*# sourceMappingURL=index.css.map */

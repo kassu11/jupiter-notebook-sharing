@@ -1,0 +1,22 @@
+{
+  "name": "solid-testing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "solid-js": "^1.8.15",
+		"socket-io": "^1.0.0",
+		"socket.io": "^4.7.2",
+		"socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "sass": "^1.77.2",
+    "vite": "^5.2.0",
+    "vite-plugin-solid": "^2.10.2"
+  }
+}
