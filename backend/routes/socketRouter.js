@@ -102,8 +102,8 @@ const socketConnection = (socket) => {
 			changeFilo.push(changes);	
 			// changeFilo.push(changes.changes);
 	
-			// socketIO.emit(socketKey, changes);
-			socket.broadcast.emit(socketKey, changes);
+			socketIO.emit(socketKey, changes);
+			// socket.broadcast.emit(socketKey, changes);
 		} catch (e) {
 			console.error(e)
 		}

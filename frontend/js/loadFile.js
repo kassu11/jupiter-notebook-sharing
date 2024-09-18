@@ -169,8 +169,27 @@ function displayFileData(fileData) {
         const pre = document.createElement("pre");
         pre.setAttribute("contenteditable", true);
         pre.textContent = block.source.map((v, i) => i % 2 == 0 ? v : "").join("");
-        pre.addEventListener("input", e => {
-            sendPreElementCellChanges(fileData.key, fileData.name, i, pre.innerText)
+        let textBeforeInput = "";
+
+        pre.addEventListener("paste", (event) => {
+            event.preventDefault();
+            const textBeforeEdit = pre.innerText;
+
+            const paste = (event.clipboardData || window.clipboardData).getData("text");
+            const selection = window.getSelection();
+            if (!selection.rangeCount) return;
+            selection.deleteFromDocument();
+            selection.getRangeAt(0).insertNode(document.createTextNode(paste));
+            selection.collapseToEnd();
+
+            sendPreElementCellChanges(fileData.key, fileData.name, i, textBeforeEdit, pre.innerText)
+        });
+
+        pre.addEventListener("beforeinput", _ => {
+            textBeforeInput = pre.innerText;
+        })
+        pre.addEventListener("input", _ => {
+            sendPreElementCellChanges(fileData.key, fileData.name, i, textBeforeInput, pre.innerText)
         })
         notebook.append(pre);
         if (fileData.handler) {
@@ -238,56 +257,133 @@ function parseFileChanges(fileData) {
     
 }
 
-async function sendPreElementCellChanges(key, filename, cellNum, preCellText) {
-    console.log(key, filename, cellNum, preCellText);
-    const fileBlock = files[key][filename].data.cells[cellNum].source;
-    const preCellBlock = preCellText.split("\n").map((v, i, a) => i == a.length - 1 ? v : v + "\n");
-    if (preCellBlock.at(-1) === "") preCellBlock.length -= 1;
-    const height = Math.max(fileBlock.length / 2, preCellBlock.length);
+async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText, editedText) {
+    console.log(key, filename, cellNum, editedText);
+    const beforeEditBlock = splitTextToBlock(beforeEditText);
+    const editedBlock = splitTextToBlock(editedText);
+
+
+
     const changes = []
-    console.log(fileBlock, preCellBlock);
+    const height = Math.max(beforeEditBlock.length, editedBlock.length);
+
     for(let y = 0; y < height; y++) {
-        const fileRow = fileBlock[y*2];
-        const preRow = preCellBlock[y];
-        console.log("Rows: \n", fileRow, preRow)
-        if (fileRow === preRow) continue;
+        if (beforeEditBlock[y] === editedBlock[y]) continue;
         else {
-            const maxWidth = Math.max(fileRow.length, preRow.length);
-            const minWidth = Math.min(fileRow.length, preRow.length);
+            const beforeEditRow = beforeEditBlock[y]
+            const editedRow = editedBlock[y]
+            console.log(beforeEditBlock[y]);
+            console.log(editedBlock[y]);
+            let start = 0;
+            let stop = 0;
+            let fromEnd = 0;
 
-            console.log("???", fileRow, preRow, preRow.length < fileRow.length)
-
-            let startDiffPos = 0;
-            let endDiffPos = maxWidth - 1;
-            for(let x = 0; x < minWidth; x++) {
-                if (fileRow[x] !== preRow[x]) break;
-                startDiffPos = x + 1;
+            for(let x = 0; x < beforeEditRow.length; x++) {
+                if (beforeEditRow[x] !== editedRow[x]) break;
+                start = x + 1;
             }
 
-            for(let x = 1; x < minWidth; x++) {
-                if (fileRow.at(-x) !== preRow.at(-x)) break;
-                if (startDiffPos + x >= minWidth - 1) break;
-                endDiffPos = fileRow.length - x - 1;
+            for(let x = 1; x < beforeEditRow.length; x++) {
+                if (beforeEditRow.at(-x) !== editedRow.at(-x) || x + start >= editedRow.length) break;
+                stop = editedRow.length - x - 1;
+                fromEnd = x - 1;
             }
 
-            
-            if (preRow.length < fileRow.length) {
-                console.log(endDiffPos - startDiffPos, maxWidth - minWidth)
-                changes.push({ 
+            if (editedRow.length === start) {
+                changes.push({
+                    row: y, 
+                    start, 
+                    end: beforeEditRow.length, 
+                    data: ""
+                });
+            } else if(start === stop) {
+                changes.push({
+                    row: y, 
+                    start, 
+                    end: start + beforeEditRow.length - editedRow.length, 
+                    data: ""
+                });
+            } else if (editedRow.length > beforeEditRow.length) {
+                changes.push({
+                    row: y, 
+                    start, 
+                    end: beforeEditRow.length - fromEnd - 1,
+                    data: editedRow.substring(start, stop + 1)
+                });
+            } else {
+                changes.push({
                     row: y,
-                    char: startDiffPos,
-                    erase: maxWidth - minWidth,
-                    id: fileBlock[y * 2 + 1],
+                    start,
+                    end: stop,
+                    data: editedRow.substring(start, stop + 1)
                 });
             }
+            // const t = beforeEditRow.length - end + start - 2;
+            console.log(start, stop, fromEnd);
+            console.log({start, end: stop})
         }
     }
+
+    // if (editedBlock.at(-1) === "") editedBlock.length -= 1;
+    // const height = Math.max(beforeEditBlock.length, editedBlock.length);
+    // const changes = []
+    // console.log(fileBlock, editedBlock);
+    // for(let y = 0; y < height; y++) {
+    //     const fileRow = fileBlock[y*2];
+    //     const preRow = editedBlock[y];
+    //     // console.log("Rows: \n", fileRow, preRow)
+        // if (fileRow === preRow) continue;
+    //     else {
+    //         const maxWidth = Math.max(fileRow.length, preRow.length);
+    //         const minWidth = Math.min(fileRow.length, preRow.length);
+
+    //         // console.log("???", fileRow, preRow, preRow.length < fileRow.length)
+
+    //         let startDiffPos = 0;
+    //         let endDiffPos = maxWidth - 1;
+    //         for(let x = 0; x < minWidth; x++) {
+    //             if (fileRow[x] !== preRow[x]) break;
+    //             startDiffPos = x + 1;
+    //         }
+
+    //         for(let x = 1; x < minWidth; x++) {
+    //             if (fileRow.at(-x) !== preRow.at(-x)) break;
+    //             if (startDiffPos + x >= minWidth - 1) break;
+    //             endDiffPos = fileRow.length - x - 1;
+    //         }
+
+            
+    //         if (preRow.length < fileRow.length) {
+    //             console.log(endDiffPos - startDiffPos, maxWidth - minWidth)
+    //             changes.push({ 
+    //                 row: y,
+    //                 char: startDiffPos,
+    //                 erase: maxWidth - minWidth,
+    //                 id: fileBlock[y * 2 + 1],
+    //             });
+    //         }
+    //     }
+    // }
 
     
     console.log(changes);
     if (changes.length > 0) {
-        changeLocalFilesAndUpdatePre({key, cel: cellNum, filename, changes});
-        socket.emit("changeFile", {key, cel: cellNum, filename, changes})
+        test(beforeEditBlock[changes[0].row], changes[0]);
+    //     changeLocalFilesAndUpdatePre({key, cel: cellNum, filename, changes});
+    //     socket.emit("changeFile", {key, cel: cellNum, filename, changes})
+    }
+    function splitTextToBlock(text) {
+        const block = text.split("\n").map((v, i, a) => i == a.length - 1 ? v : v + "\n");
+        if (block.at(-1) === "") block.splice(block.length - 2, 1);
+
+        return block;
+    }
+
+    function test(t, c) {
+        const value = t.substring(0, c.start) + c.data + t.substring(c.end);
+        console.log("Testing print: ", value == editedBlock[c.row]);
+        console.log(value);
+        console.log(editedBlock[c.row]);
     }
 }
 
