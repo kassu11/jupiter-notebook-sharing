@@ -92,7 +92,7 @@ const socketConnection = (socket) => {
 					if (change.char == 0) {
 						block[change.row * 2] = row.substring(change.char + change.erase);
 					} else {
-						block[change.row * 2] = row.substring(0, change.char + 1) + row.substring(change.char + 1 + change.erase);
+						block[change.row * 2] = row.substring(0, change.char) + row.substring(change.char + change.erase);
 					}
 					block[change.row * 2 + 1]++;
 				}

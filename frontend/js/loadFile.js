@@ -170,7 +170,7 @@ function displayFileData(fileData) {
         pre.setAttribute("contenteditable", true);
         pre.textContent = block.source.map((v, i) => i % 2 == 0 ? v : "").join("");
         pre.addEventListener("input", e => {
-            sendPreElementCellChanges(fileData.key, fileData.name, i, pre.textContent)
+            sendPreElementCellChanges(fileData.key, fileData.name, i, pre.innerText)
         })
         notebook.append(pre);
         if (fileData.handler) {
@@ -242,6 +242,7 @@ async function sendPreElementCellChanges(key, filename, cellNum, preCellText) {
     console.log(key, filename, cellNum, preCellText);
     const fileBlock = files[key][filename].data.cells[cellNum].source;
     const preCellBlock = preCellText.split("\n").map((v, i, a) => i == a.length - 1 ? v : v + "\n");
+    if (preCellBlock.at(-1) === "") preCellBlock.length -= 1;
     const height = Math.max(fileBlock.length / 2, preCellBlock.length);
     const changes = []
     console.log(fileBlock, preCellBlock);
@@ -254,20 +255,24 @@ async function sendPreElementCellChanges(key, filename, cellNum, preCellText) {
             const maxWidth = Math.max(fileRow.length, preRow.length);
             const minWidth = Math.min(fileRow.length, preRow.length);
 
+            console.log("???", fileRow, preRow, preRow.length < fileRow.length)
+
             let startDiffPos = 0;
             let endDiffPos = maxWidth - 1;
             for(let x = 0; x < minWidth; x++) {
                 if (fileRow[x] !== preRow[x]) break;
-                startDiffPos = x;
+                startDiffPos = x + 1;
             }
 
             for(let x = 1; x < minWidth; x++) {
                 if (fileRow.at(-x) !== preRow.at(-x)) break;
                 if (startDiffPos + x >= minWidth - 1) break;
-                endDiffPos = minWidth - x;
+                endDiffPos = fileRow.length - x - 1;
             }
 
+            
             if (preRow.length < fileRow.length) {
+                console.log(endDiffPos - startDiffPos, maxWidth - minWidth)
                 changes.push({ 
                     row: y,
                     char: startDiffPos,
@@ -298,7 +303,7 @@ function changeLocalFilesAndUpdatePre(changes) {
             if (change.char == 0) {
                 block[change.row * 2] = row.substring(change.char + change.erase);
             } else {
-                block[change.row * 2] = row.substring(0, change.char + 1) + row.substring(change.char + 1 + change.erase);
+                block[change.row * 2] = row.substring(0, change.char) + row.substring(change.char + change.erase);
             }
             block[change.row * 2 + 1]++;
         }
