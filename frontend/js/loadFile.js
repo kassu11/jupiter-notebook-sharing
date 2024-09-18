@@ -17,12 +17,17 @@ const socket = socketIO("http://localhost:4000/", {
 
 host.addEventListener("click", async e => {
     const key = prompt("Set custom room key");
-    const fileData = await loadProjectFolder();
-    files[key] = fileData;
+    const filesData = await loadProjectFolder();
+    files[key] = filesData;
 
-    await api.hostFiles({fileData: fileData.map(r => jsonDataCopyForServer(r.data)), key, id: socket.id});
+    await api.hostFiles({
+        fileData: jsonDataCopyForServer(filesData), 
+        key, 
+        id: socket.id
+    });
 
-    console.log(writeJsonDataToUserFile(fileData[0]));
+    console.log(jsonDataCopyForServer(filesData));
+
 
 
     // socket.on("post/" + key, e => {
@@ -31,14 +36,49 @@ host.addEventListener("click", async e => {
 });
 
 join.addEventListener("click", async e => {
-    const key = prompt("Enter room key");
+    const roomKey = prompt("Enter room key");
     // loadProjectFolder();
 
-    const t = await api.getLoadedFiles({key});
+    const fetchedFiles = await api.getLoadedFiles({key: roomKey});
+    files[roomKey] = fetchedFiles.files;
+    const fileTreeObject = {};
 
-    // await api.hostLobby({key});
+    for(const file of Object.values(fetchedFiles.files)) {
+        let curr = fileTreeObject;
+        file.name.substring(1).split("/").forEach((n, i, arr) => {
+            curr[n] ??= {};
+            curr = curr[n];
+            if (i == arr.length - 1) {
+                curr.file = true
+                curr.fullFileName = file.name;
+            }; 
+        });
+    }
 
-    console.log(t)
+    function recursiveFoldering(rows, parentUl) {
+        for (const [key, value] of rows) {
+            if (value.file === true) {
+                const li = document.createElement("li");
+                li.textContent = key;
+                li.classList.add("file");
+                parentUl.append(li);
+                li.addEventListener("click", () => displayFileData(files[roomKey][value.fullFileName]));
+            } else {
+                const li = document.createElement("li");
+                li.textContent = key;
+                const ul = document.createElement("ul");
+                li.append(ul);
+                parentUl.append(li);
+                recursiveFoldering(Object.entries(value), ul);
+            }
+        }
+    }
+
+    recursiveFoldering(Object.entries(fileTreeObject), fileTree);
+
+    console.log(files)
+
+    console.log(fetchedFiles, Object.entries(fileTreeObject));
 
 
     // socket.on("post/" + key, e => {
@@ -52,7 +92,7 @@ loadButton.addEventListener("click", loadProjectFolder);
 async function loadProjectFolder() {
     fileTree.textContent = "";
     const reponse = await showDirectoryPicker({ id: "jupiter", mode: "readwrite" });
-    const fileNames = [];
+    const fileNames = {};
 
     for await (const entry of reponse.values()) await recurseSubFiles(entry, fileTree, fileNames, "");
 
@@ -99,46 +139,53 @@ async function createFile(file, parentUl, fileNames, path) {
             row.source.splice(i, 0, 0);
         }
     });
-    fileNames.push({name: `${path}/${file.name}`, data: jsonData});
+    const fileName = `${path}/${file.name}`;
+    fileNames[fileName] = {name: fileName, data: jsonData, handler: file};
     const li = document.createElement("li");
-    li.classList.add("file");
+    li.classList.add("file", "real");
     li.textContent = file.name;
-    li.addEventListener("click", () => clickFile(file));
+    li.addEventListener("click", () => displayFileData(fileNames[fileName]));
     parentUl.append(li);
 }
 
-async function clickFile(file) {
-    const fileHandler = await file.getFile();
-    const fileData = await fileHandler.text();
-    const jsonData = JSON.parse(fileData);
+function displayFileData(fileData) {
     notebook.textContent = "";
-    for (const block of jsonData.cells) {
+    for (const block of fileData.data.cells) {
         const pre = document.createElement("pre");
         pre.setAttribute("contenteditable", true);
-        const save = document.createElement("button");
-        save.textContent = "Save";
-        save.addEventListener("click", async () => {
-            const stream = await file.createWritable();
-            block.source = pre.innerText.split("\n").map(v => v + "\n");
-            await stream.write(JSON.stringify(jsonData, null, 4));
-            await stream.close();
-        })
-        pre.textContent = block.source.join("");
-        notebook.append(pre, save);
+        pre.textContent = block.source.map((v, i) => i % 2 == 0 ? v : "").join("");
+        notebook.append(pre);
+        if (fileData.handler) {
+            const save = document.createElement("button");
+            save.textContent = "Save";
+            save.addEventListener("click", async () => {
+                // const stream = await fileData.handler.createWritable();
+                // block.source = pre.innerText.split("\n").map(v => v + "\n");
+                // await stream.write(JSON.stringify( fileData.data, null, 4));
+                // await stream.close();
+                await writeJsonDataToUserFile(fileData);
+            })
+
+            notebook.append(save);
+        }
         console.log(block);
     }
+
 }
 
 /**
  * Returns json copy of a file without outputs or other useless data so save space from server.
  */
-function jsonDataCopyForServer(data) {
-    const clone = structuredClone(data);
-    clone.cells.forEach(row => {
-        delete row["metadata"];
-        delete row["execution_count"];
-        delete row["outputs"];
-    });
+function jsonDataCopyForServer(filesData) {
+    const clone = structuredClone(filesData);
+    for (const fileData of Object.values(clone)) {
+        delete fileData.handler;
+        fileData.data.cells.forEach(row => {
+            delete row["metadata"];
+            delete row["execution_count"];
+            delete row["outputs"];
+        });
+    }
 
     return clone;
 }
@@ -148,15 +195,18 @@ function jsonDataCopyForServer(data) {
  * Returns json copy of a file without row id numbers.
  * Row id numbers are only used to sync the file with the server, end will break the file if keps
  */
-function writeJsonDataToUserFile(fileInfo) {
-    const clone = structuredClone(fileInfo.data);
+async function writeJsonDataToUserFile(fileData) {
+    // Broken koska objecti muutos
+    const clone = structuredClone(fileData.data);
     clone.cells.forEach(row => {
         for(let i = (row.source?.length - 1) || 0; i > 0; i -= 2) {
             row.source.splice(i, 1);
         };
     });
 
-    return clone;
+    const stream = await fileData.handler.createWritable();
+    await stream.write(JSON.stringify(clone, null, 4));
+    await stream.close();
 }
 
 /**

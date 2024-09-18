@@ -11,8 +11,12 @@
 
     .file {
         cursor: pointer;
-        background: blue;
+        background-color: blue;
         color: white;
+
+        &.real {
+            background-color: green;
+        }
     }
 }
 
