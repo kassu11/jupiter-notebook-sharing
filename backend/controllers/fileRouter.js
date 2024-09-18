@@ -1,4 +1,5 @@
 // const mongoose = require("mongoose");
+const Filo = require("../models/Filo");
 // const Post = require("../models/posts");
 // const { User } = require("../models/users");
 const { socketIO } = require("../app");
@@ -45,6 +46,9 @@ const hostFiles = async (req, res) => {
 			delete hostedFiles[hostingUsers[id]];
 		}
 		hostedFiles[key] = fileData;
+		for(const file of Object.values(fileData)) {
+			file.changes = new Filo(50);
+		}
 		hostingUsers[id] = key;
 		// socketIO.emit("post/" + id, { likes: 1, dislikes: 2 });
 		res.json({"ok": 200});
@@ -57,7 +61,11 @@ const getFiles = async (req, res) => {
 
 	try {
 		if (!hostedFiles[key]) throw new Error("Invalid key");
-		res.json({"files": hostedFiles[key]});
+		const clone = structuredClone(hostedFiles[key]);
+		for(const file of Object.values(clone)) {
+			delete file.changes;
+		}
+		res.json({"files": clone});
 	} catch (err) {
 		res.status(500).json({ message: err.message });
 	}

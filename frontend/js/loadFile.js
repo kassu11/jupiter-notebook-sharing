@@ -5,6 +5,7 @@ const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
 const host = document.querySelector("#host");
 const join = document.querySelector("#join");
+const lag = document.querySelector("#lag");
 
 const files = {}
 
@@ -14,11 +15,18 @@ const socket = socketIO("http://localhost:4000/", {
     }
 });
 
+lag.addEventListener("click", async e => {
+    socket.emit("lag", "data")
+});
 
 host.addEventListener("click", async e => {
     const key = prompt("Set custom room key");
     const filesData = await loadProjectFolder();
     files[key] = filesData;
+
+    for(const value of Object.values(filesData)) {
+        value.key = key;
+    }
 
     await api.hostFiles({
         fileData: jsonDataCopyForServer(filesData), 
@@ -30,9 +38,9 @@ host.addEventListener("click", async e => {
 
 
 
-    // socket.on("post/" + key, e => {
-    //     console.log("Socket message", e)
-    // })
+    socket.on(`fileUpdates${key}`, e => {
+        changeLocalFilesAndUpdatePre(e);
+    })
 });
 
 join.addEventListener("click", async e => {
@@ -41,6 +49,9 @@ join.addEventListener("click", async e => {
 
     const fetchedFiles = await api.getLoadedFiles({key: roomKey});
     files[roomKey] = fetchedFiles.files;
+    for(const value of Object.values(fetchedFiles.files)) {
+        value.key = roomKey;
+    }
     const fileTreeObject = {};
 
     for(const file of Object.values(fetchedFiles.files)) {
@@ -81,6 +92,9 @@ join.addEventListener("click", async e => {
     console.log(fetchedFiles, Object.entries(fileTreeObject));
 
 
+    socket.on(`fileUpdates${roomKey}`, e => {
+        changeLocalFilesAndUpdatePre(e);
+    })
     // socket.on("post/" + key, e => {
     //     console.log("Socket message", e)
     // });
@@ -150,10 +164,14 @@ async function createFile(file, parentUl, fileNames, path) {
 
 function displayFileData(fileData) {
     notebook.textContent = "";
-    for (const block of fileData.data.cells) {
+    for (let i = 0; i < fileData.data.cells.length; i++) {
+        const block = fileData.data.cells[i];
         const pre = document.createElement("pre");
         pre.setAttribute("contenteditable", true);
         pre.textContent = block.source.map((v, i) => i % 2 == 0 ? v : "").join("");
+        pre.addEventListener("input", e => {
+            sendPreElementCellChanges(fileData.key, fileData.name, i, pre.textContent)
+        })
         notebook.append(pre);
         if (fileData.handler) {
             const save = document.createElement("button");
@@ -180,6 +198,7 @@ function jsonDataCopyForServer(filesData) {
     const clone = structuredClone(filesData);
     for (const fileData of Object.values(clone)) {
         delete fileData.handler;
+        delete fileData.key;
         fileData.data.cells.forEach(row => {
             delete row["metadata"];
             delete row["execution_count"];
@@ -215,6 +234,75 @@ async function writeJsonDataToUserFile(fileData) {
  * the local files variable.
  * This function also updates the outputs in each cell of the local files variable
  */
-function parseFileChanges() {
+function parseFileChanges(fileData) {
+    
+}
 
+async function sendPreElementCellChanges(key, filename, cellNum, preCellText) {
+    console.log(key, filename, cellNum, preCellText);
+    const fileBlock = files[key][filename].data.cells[cellNum].source;
+    const preCellBlock = preCellText.split("\n").map((v, i, a) => i == a.length - 1 ? v : v + "\n");
+    const height = Math.max(fileBlock.length / 2, preCellBlock.length);
+    const changes = []
+    console.log(fileBlock, preCellBlock);
+    for(let y = 0; y < height; y++) {
+        const fileRow = fileBlock[y*2];
+        const preRow = preCellBlock[y];
+        console.log("Rows: \n", fileRow, preRow)
+        if (fileRow === preRow) continue;
+        else {
+            const maxWidth = Math.max(fileRow.length, preRow.length);
+            const minWidth = Math.min(fileRow.length, preRow.length);
+
+            let startDiffPos = 0;
+            let endDiffPos = maxWidth - 1;
+            for(let x = 0; x < minWidth; x++) {
+                if (fileRow[x] !== preRow[x]) break;
+                startDiffPos = x;
+            }
+
+            for(let x = 1; x < minWidth; x++) {
+                if (fileRow.at(-x) !== preRow.at(-x)) break;
+                if (startDiffPos + x >= minWidth - 1) break;
+                endDiffPos = minWidth - x;
+            }
+
+            if (preRow.length < fileRow.length) {
+                changes.push({ 
+                    row: y,
+                    char: startDiffPos,
+                    erase: maxWidth - minWidth,
+                    id: fileBlock[y * 2 + 1],
+                });
+            }
+        }
+    }
+
+    
+    console.log(changes);
+    if (changes.length > 0) {
+        changeLocalFilesAndUpdatePre({key, cel: cellNum, filename, changes});
+        socket.emit("changeFile", {key, cel: cellNum, filename, changes})
+    }
+}
+
+
+function changeLocalFilesAndUpdatePre(changes) {
+    console.log("Change pre element", changes)
+
+    const fileData = files[changes.key][changes.filename];
+    const block = fileData.data.cells[changes.cel].source;
+    for(const change of changes.changes) {
+        const row = block[change.row * 2]
+        if (change.erase) {
+            if (change.char == 0) {
+                block[change.row * 2] = row.substring(change.char + change.erase);
+            } else {
+                block[change.row * 2] = row.substring(0, change.char + 1) + row.substring(change.char + 1 + change.erase);
+            }
+            block[change.row * 2 + 1]++;
+        }
+    }
+
+    notebook.querySelectorAll("pre")[changes.cel].textContent = block.map((v, i) => i % 2 == 0 ? v : "").join("");
 }
