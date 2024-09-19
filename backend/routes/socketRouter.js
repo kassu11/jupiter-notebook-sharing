@@ -14,7 +14,7 @@ const socketConnection = (socket) => {
 
 	socket.on("lag", _ => {
 		const date = new Date();
-		const delay = date.setSeconds(date.getSeconds() + 5);
+		const delay = date.setSeconds(date.getSeconds() + 15);
 
 		while(new Date().getTime() < delay) {
 
@@ -22,9 +22,9 @@ const socketConnection = (socket) => {
 	});
 
 	socket.on("changeFile", change => {
-		console.log("Change start")
+		// console.log("Change start")
 		try {
-			console.log(change);
+			// console.log(change);
 			const socketKey = `fileUpdates${change.key}`
 			const fileData = hostedFiles[change.key][change.filename];
 			const changeFilo = fileData.changes;
@@ -32,9 +32,29 @@ const socketConnection = (socket) => {
 			// console.log(hostedFiles[changes.key][changes.filename].changes.iterator());
 			
 			// const wrongIds = change.changes.filter(change => {
-			// 	// const id = fileData.data.cells[changes.cel].source[change.row*2 + 1];
-			// 	// return change.id !== id;
+			// 	const id = fileData.data.cells[changes.cel].source[change.row*2 + 1];
+			// 	return change.id !== id;
 			// });
+
+			if(fileData.data.cells[change.cel].id !== change.id) {
+				console.log("Wrong id");
+				for(const oldChange of changeFilo.iterator()) {
+					if (oldChange.id < change.id) continue;
+					if (oldChange.id > change.id) throw new Error("Invalid id");
+
+					const oldX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
+					const curX = Math.max(change.end, change.start + change.data.length);
+					// const curDiff = change.end - change.start + change.data.length;
+					if (oldX <= change.start) {
+						change.start -= oldChange.end - oldChange.start - oldChange.data.length
+						change.end -= oldChange.end - oldChange.start - oldChange.data.length
+					}
+					change.id++;
+
+					// const delta = oldChange.end - change.
+					console.log("old: ", oldChange);
+				}
+			}
 
 			// console.log("Wrongid: ", wrongIds)
 
@@ -101,17 +121,18 @@ const socketConnection = (socket) => {
 			const sourceText = fileData.data.cells[change.cel].source;
 			const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
 			fileData.data.cells[change.cel].source = newText;
+    	fileData.data.cells[change.cel].id++;
 
 
-			changeFilo.push(change);	
+			changeFilo.push(change);
 			// changeFilo.push(changes.changes);
 	
-			socketIO.emit(socketKey, change);
-			// socket.broadcast.emit(socketKey, changes);
+			// socketIO.emit(socketKey, change);
+			socket.broadcast.emit(socketKey, change);
 		} catch (e) {
 			console.error(e)
 		}
-		console.log("Change end")
+		// console.log("Change end")
 	});
 
 	// socket.on("host", data => {

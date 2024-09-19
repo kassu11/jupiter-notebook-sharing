@@ -152,6 +152,7 @@ async function createFile(file, parentUl, fileNames, path) {
     const jsonData = JSON.parse(fileData);
     for(const cell of jsonData.cells) {
         cell.source = cell.source.join("");
+        cell.id = 0;
     }
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file};
@@ -256,7 +257,7 @@ async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText,
 
     if (beforeEditText === editedText) return;
 
-    const change = {key, cel: cellNum, filename};
+    const change = {key, cel: cellNum, filename, id: files[key][filename].data.cells[cellNum].id};
 
     let firstUnchangedChar = -1;
     let lastUnchangedChar = -1;
@@ -303,9 +304,11 @@ async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText,
     // const t = beforeEditRow.length - end + start - 2;
     console.log(firstUnchangedChar, lastUnchangedChar);
     console.log({start: firstUnchangedChar, end: lastUnchangedChar})
+
+    console.log(change);
     
     test(beforeEditText, change);
-    // changeLocalFilesAndUpdatePre(change);
+    changeLocalFilesAndUpdatePre(change);
     socket.emit("changeFile", change);
     
 
@@ -325,6 +328,7 @@ function changeLocalFilesAndUpdatePre(change) {
     const sourceText = fileData.data.cells[change.cel].source;
     const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
     fileData.data.cells[change.cel].source = newText;
+    fileData.data.cells[change.cel].id++;
     // for(const change of changes.changes) {
     //     const row = block[change.row * 2]
     //     if (change.erase) {
