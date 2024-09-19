@@ -127,6 +127,8 @@ async function recurseSubFiles(entry, parentUl, fileNames, path) {
 async function createDirectory(directory, parentUl, fileNames, path) {
     if (directory.name == ".git") return;
     if (directory.name == "node_modules") return;
+    if (directory.name == "venv") return;
+    if (directory.name == ".idea") return;
 
     const li = document.createElement("li");
     li.textContent = directory.name;
@@ -252,7 +254,9 @@ function parseFileChanges(fileData) {
 async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText, editedText) {
     console.log(key, filename, cellNum, editedText);
 
-    const changes = []
+    if (beforeEditText === editedText) return;
+
+    const change = {key, cel: cellNum, filename};
 
     let firstUnchangedChar = -1;
     let lastUnchangedChar = -1;
@@ -264,7 +268,7 @@ async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText,
 
     for(let x = 1; x < beforeEditText.length; x++) {
         if (beforeEditText.at(-x) !== editedText.at(-x) || x + firstUnchangedChar === editedText.length) break;
-        lastUnchangedChar = x;
+        lastUnchangedChar = x - 1;
     }
 
     // const change = {}
@@ -276,78 +280,62 @@ async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText,
     // }
 
     if (firstUnchangedChar === -1 && lastUnchangedChar === -1) {
-        console.log("If change: 1")
-        changes.push({
-            start: 0,
-            end: beforeEditText.length,
-            data: editedText
-        });
-    } else if(firstUnchangedChar === lastUnchangedChar) {
-        console.log("If change: 2")
-        // changes.push({
-        //     start: firstUnchangedChar, 
-        //     end: firstUnchangedChar + beforeEditRow.length - editedRow.length, 
-        //     data: ""
-        // });
-    } else if (editedText.length > beforeEditText.length) {
-        console.log("If change: 3")
-        // changes.push({
-        //     start: firstUnchangedChar, 
-        //     end: beforeEditRow.length - fromEnd - 1,
-        //     data: editedRow.substring(firstUnchangedChar, lastUnchangedChar + 1)
-        // });
-    } else {
-        console.log("If change: 4")
-        // changes.push({
-        //     start: firstUnchangedChar,
-        //     end: lastUnchangedChar,
-        //     data: editedRow.substring(firstUnchangedChar, lastUnchangedChar + 1)
-        // });
+        console.log("If change: 1 done")
+            change.start = 0;
+            change.end = beforeEditText.length;
+            change.data = editedText;
+    } else if(firstUnchangedChar === -1) {
+        console.log("If change: 2 and 3 done")
+            change.start = 0 ;
+            change.end = beforeEditText.length - 1 - lastUnchangedChar;
+            change.data = editedText.substring(0, editedText.length - 1 - lastUnchangedChar);
+    } else if(lastUnchangedChar === -1) {
+        console.log("If change: 4 and 5 done")
+            change.start = firstUnchangedChar + 1;
+            change.end = beforeEditText.length;
+            change.data = editedText.substring(firstUnchangedChar + 1);
+    }  else {
+        console.log("If change: 6 and 7 done");
+            change.start = firstUnchangedChar + 1;
+            change.end = beforeEditText.length - lastUnchangedChar - 1;
+            change.data = editedText.substring(firstUnchangedChar + 1, editedText.length - lastUnchangedChar - 1);
     }
     // const t = beforeEditRow.length - end + start - 2;
     console.log(firstUnchangedChar, lastUnchangedChar);
     console.log({start: firstUnchangedChar, end: lastUnchangedChar})
-        
     
+    test(beforeEditText, change);
+    // changeLocalFilesAndUpdatePre(change);
+    socket.emit("changeFile", change);
     
-    console.log(changes);
-    if (changes.length > 0) {
-        test(beforeEditBlock[changes[0].row], changes[0]);
-    //     changeLocalFilesAndUpdatePre({key, cel: cellNum, filename, changes});
-    //     socket.emit("changeFile", {key, cel: cellNum, filename, changes})
-    }
-    function splitTextToBlock(text) {
-        const block = text.split("\n").map((v, i, a) => i == a.length - 1 ? v : v + "\n");
-        if (block.at(-1) === "") block.splice(block.length - 2, 1);
-
-        return block;
-    }
 
     function test(t, c) {
         const value = t.substring(0, c.start) + c.data + t.substring(c.end);
-        console.log("Testing print: ", value == editedBlock[c.row]);
+        console.log("Testing print: ", value == editedText);
         console.log(value);
-        console.log(editedBlock[c.row]);
+        console.log(editedText);
     }
 }
 
 
-function changeLocalFilesAndUpdatePre(changes) {
-    console.log("Change pre element", changes)
+function changeLocalFilesAndUpdatePre(change) {
+    console.log("Change pre element", change)
 
-    const fileData = files[changes.key][changes.filename];
-    const block = fileData.data.cells[changes.cel].source;
-    for(const change of changes.changes) {
-        const row = block[change.row * 2]
-        if (change.erase) {
-            if (change.char == 0) {
-                block[change.row * 2] = row.substring(change.char + change.erase);
-            } else {
-                block[change.row * 2] = row.substring(0, change.char) + row.substring(change.char + change.erase);
-            }
-            block[change.row * 2 + 1]++;
-        }
-    }
+    const fileData = files[change.key][change.filename];
+    const sourceText = fileData.data.cells[change.cel].source;
+    const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
+    fileData.data.cells[change.cel].source = newText;
+    // for(const change of changes.changes) {
+    //     const row = block[change.row * 2]
+    //     if (change.erase) {
+    //         if (change.char == 0) {
+    //             block[change.row * 2] = row.substring(change.char + change.erase);
+    //         } else {
+    //             block[change.row * 2] = row.substring(0, change.char) + row.substring(change.char + change.erase);
+    //         }
+    //         block[change.row * 2 + 1]++;
+    //     }
+    // }
 
-    notebook.querySelectorAll("pre")[changes.cel].textContent = block.join("");
+    notebook.querySelectorAll("pre")[change.cel].textContent = newText;
 }
