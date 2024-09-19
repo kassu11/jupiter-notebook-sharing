@@ -148,11 +148,9 @@ async function createFile(file, parentUl, fileNames, path) {
     const fileHandler = await file.getFile();
     const fileData = await fileHandler.text();
     const jsonData = JSON.parse(fileData);
-    jsonData.cells.forEach(row => {
-        for(let i = 1; i <= row.source?.length; i += 2) {
-            row.source.splice(i, 0, 0);
-        }
-    });
+    for(const cell of jsonData.cells) {
+        cell.source = cell.source.join("");
+    }
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file};
     const li = document.createElement("li");
@@ -168,7 +166,7 @@ function displayFileData(fileData) {
         const block = fileData.data.cells[i];
         const pre = document.createElement("pre");
         pre.setAttribute("contenteditable", true);
-        pre.textContent = block.source.map((v, i) => i % 2 == 0 ? v : "").join("");
+        pre.textContent = block.source;
         let textBeforeInput = "";
 
         pre.addEventListener("paste", (event) => {
@@ -236,12 +234,6 @@ function jsonDataCopyForServer(filesData) {
 async function writeJsonDataToUserFile(fileData) {
     // Broken koska objecti muutos
     const clone = structuredClone(fileData.data);
-    clone.cells.forEach(row => {
-        for(let i = (row.source?.length - 1) || 0; i > 0; i -= 2) {
-            row.source.splice(i, 1);
-        };
-    });
-
     const stream = await fileData.handler.createWritable();
     await stream.write(JSON.stringify(clone, null, 4));
     await stream.close();
@@ -259,112 +251,64 @@ function parseFileChanges(fileData) {
 
 async function sendPreElementCellChanges(key, filename, cellNum, beforeEditText, editedText) {
     console.log(key, filename, cellNum, editedText);
-    const beforeEditBlock = splitTextToBlock(beforeEditText);
-    const editedBlock = splitTextToBlock(editedText);
-
-
 
     const changes = []
-    const height = Math.max(beforeEditBlock.length, editedBlock.length);
 
-    for(let y = 0; y < height; y++) {
-        if (beforeEditBlock[y] === editedBlock[y]) continue;
-        else {
-            const beforeEditRow = beforeEditBlock[y]
-            const editedRow = editedBlock[y]
-            console.log(beforeEditBlock[y]);
-            console.log(editedBlock[y]);
-            let start = 0;
-            let stop = 0;
-            let fromEnd = 0;
+    let firstUnchangedChar = -1;
+    let lastUnchangedChar = -1;
 
-            for(let x = 0; x < beforeEditRow.length; x++) {
-                if (beforeEditRow[x] !== editedRow[x]) break;
-                start = x + 1;
-            }
-
-            for(let x = 1; x < beforeEditRow.length; x++) {
-                if (beforeEditRow.at(-x) !== editedRow.at(-x) || x + start >= editedRow.length) break;
-                stop = editedRow.length - x - 1;
-                fromEnd = x - 1;
-            }
-
-            if (editedRow.length === start) {
-                changes.push({
-                    row: y, 
-                    start, 
-                    end: beforeEditRow.length, 
-                    data: ""
-                });
-            } else if(start === stop) {
-                changes.push({
-                    row: y, 
-                    start, 
-                    end: start + beforeEditRow.length - editedRow.length, 
-                    data: ""
-                });
-            } else if (editedRow.length > beforeEditRow.length) {
-                changes.push({
-                    row: y, 
-                    start, 
-                    end: beforeEditRow.length - fromEnd - 1,
-                    data: editedRow.substring(start, stop + 1)
-                });
-            } else {
-                changes.push({
-                    row: y,
-                    start,
-                    end: stop,
-                    data: editedRow.substring(start, stop + 1)
-                });
-            }
-            // const t = beforeEditRow.length - end + start - 2;
-            console.log(start, stop, fromEnd);
-            console.log({start, end: stop})
-        }
+    for(let x = 0; x < beforeEditText.length; x++) {
+        if (beforeEditText[x] !== editedText[x]) break;
+        firstUnchangedChar = x;
     }
 
-    // if (editedBlock.at(-1) === "") editedBlock.length -= 1;
-    // const height = Math.max(beforeEditBlock.length, editedBlock.length);
-    // const changes = []
-    // console.log(fileBlock, editedBlock);
-    // for(let y = 0; y < height; y++) {
-    //     const fileRow = fileBlock[y*2];
-    //     const preRow = editedBlock[y];
-    //     // console.log("Rows: \n", fileRow, preRow)
-        // if (fileRow === preRow) continue;
-    //     else {
-    //         const maxWidth = Math.max(fileRow.length, preRow.length);
-    //         const minWidth = Math.min(fileRow.length, preRow.length);
+    for(let x = 1; x < beforeEditText.length; x++) {
+        if (beforeEditText.at(-x) !== editedText.at(-x) || x + firstUnchangedChar === editedText.length) break;
+        lastUnchangedChar = x;
+    }
 
-    //         // console.log("???", fileRow, preRow, preRow.length < fileRow.length)
+    // const change = {}
 
-    //         let startDiffPos = 0;
-    //         let endDiffPos = maxWidth - 1;
-    //         for(let x = 0; x < minWidth; x++) {
-    //             if (fileRow[x] !== preRow[x]) break;
-    //             startDiffPos = x + 1;
-    //         }
-
-    //         for(let x = 1; x < minWidth; x++) {
-    //             if (fileRow.at(-x) !== preRow.at(-x)) break;
-    //             if (startDiffPos + x >= minWidth - 1) break;
-    //             endDiffPos = fileRow.length - x - 1;
-    //         }
-
-            
-    //         if (preRow.length < fileRow.length) {
-    //             console.log(endDiffPos - startDiffPos, maxWidth - minWidth)
-    //             changes.push({ 
-    //                 row: y,
-    //                 char: startDiffPos,
-    //                 erase: maxWidth - minWidth,
-    //                 id: fileBlock[y * 2 + 1],
-    //             });
-    //         }
-    //     }
+    // if (firstUnchangedChar === -1 ) {
+    //     change.start = 0;
+    // } if(lastUnchangedChar === -1) {
+    //     change.end = beforeEditRow.length;
     // }
 
+    if (firstUnchangedChar === -1 && lastUnchangedChar === -1) {
+        console.log("If change: 1")
+        changes.push({
+            start: 0,
+            end: beforeEditText.length,
+            data: editedText
+        });
+    } else if(firstUnchangedChar === lastUnchangedChar) {
+        console.log("If change: 2")
+        // changes.push({
+        //     start: firstUnchangedChar, 
+        //     end: firstUnchangedChar + beforeEditRow.length - editedRow.length, 
+        //     data: ""
+        // });
+    } else if (editedText.length > beforeEditText.length) {
+        console.log("If change: 3")
+        // changes.push({
+        //     start: firstUnchangedChar, 
+        //     end: beforeEditRow.length - fromEnd - 1,
+        //     data: editedRow.substring(firstUnchangedChar, lastUnchangedChar + 1)
+        // });
+    } else {
+        console.log("If change: 4")
+        // changes.push({
+        //     start: firstUnchangedChar,
+        //     end: lastUnchangedChar,
+        //     data: editedRow.substring(firstUnchangedChar, lastUnchangedChar + 1)
+        // });
+    }
+    // const t = beforeEditRow.length - end + start - 2;
+    console.log(firstUnchangedChar, lastUnchangedChar);
+    console.log({start: firstUnchangedChar, end: lastUnchangedChar})
+        
+    
     
     console.log(changes);
     if (changes.length > 0) {
@@ -405,5 +349,5 @@ function changeLocalFilesAndUpdatePre(changes) {
         }
     }
 
-    notebook.querySelectorAll("pre")[changes.cel].textContent = block.map((v, i) => i % 2 == 0 ? v : "").join("");
+    notebook.querySelectorAll("pre")[changes.cel].textContent = block.join("");
 }
