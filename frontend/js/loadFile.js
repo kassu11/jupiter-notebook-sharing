@@ -345,21 +345,29 @@ function changeInsideCell(key, filename, cellNum, beforeEditText, editedText) {
 
 function advanceChangeForward(oldChange, change) {
     const clone = structuredClone(change);
-    const currentMaxX = Math.max(clone.end, clone.start + clone.data.length);
+    const oldDelta = oldChange.end - oldChange.start;
+    const curDelta = clone.end - clone.start;
+    const oldMovement = oldChange.data.length - oldDelta;
+    const curMovement = clone.data.length - curDelta;
     const oldMaxX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
-    const charMovement = oldChange.data.length - (oldChange.end - oldChange.start);
+    const curMaxX = Math.max(clone.end, clone.start + clone.data.length);
 
-    if (currentMaxX <= oldChange.start) {
-        console.log("Revert 1: Done")
+    if (oldMovement === 0 && curMovement === 0) {
+        console.log("Revert 0: ")
         return clone;
-    } else if (oldMaxX <= clone.start) {
-        console.log("Advance 2: Done")
-        clone.start -= oldMaxX - oldChange.start;
-        clone.end -= oldMaxX - oldChange.start;
-    } else if (true) {
+    } else if (oldChange.end + oldMovement <= clone.start) {
+        console.log("Revert 1: ")
+        clone.start += oldMovement;
+        clone.end += oldMovement;
+    } else if (clone.start < oldChange.start && clone.end < oldChange.end && clone.end > oldChange.start) {
+        console.log("Advance 2: ")
+        clone.end += oldMovement;
+    } else if (clone.start <= oldChange.start && clone.end - oldMovement > oldChange.end) {
         console.log("Advance 3: ")
-    } else if (true) {
+        clone.end += oldMovement;
+    } else if (clone.start > oldChange.start && clone.end > oldChange.end) {
         console.log("Advance 4: ")
+        clone.end += oldMovement;
     } else if (true) {
         console.log("Advance 5: ")
     } else if (true) {
@@ -378,32 +386,34 @@ function advanceChangeForward(oldChange, change) {
 
 function revertChangeBackward(oldChange, change) {
     const clone = structuredClone(change);
+    const oldDelta = oldChange.end - oldChange.start;
+    const curDelta = clone.end - clone.start;
+    const oldMovement = oldChange.data.length - oldDelta;
+    const curMovement = clone.data.length - curDelta;
     const oldMaxX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
-    const currentMaxX = Math.max(clone.end, clone.start + clone.data.length);
-    const charMovement = oldChange.data.length - (oldChange.end - oldChange.start);
+    const curMaxX = Math.max(clone.end, clone.start + clone.data.length);
+    // const currentMaxX = Math.max(clone.end, clone.start + clone.data.length);
+    // const charMovement = oldChange.data.length - (oldChange.end - oldChange.start);
 
-    console.log(charMovement);
-    // const curX = Math.max(change.end, change.start + change.data.length);
-    // const curDiff = change.end - change.start + change.data.length;
-    // if (oldX <= change.start) {
-    //     change.start -= oldChange.end - oldChange.start - oldChange.data.length
-    //     change.end -= oldChange.end - oldChange.start - oldChange.data.length
-    // } else if(oldChange.start) {
+    console.log(oldChange, change);
 
-    // }
-    // change.id++;
-    if (currentMaxX <= oldChange.start) {
-        console.log("Revert 1: Done")
+    if (oldMovement === 0 && curMovement === 0) {
+        console.log("Revert 0: Done")
         return clone;
     }
-    else if (oldMaxX <= clone.start) {
-        console.log("Revert 2: done")
-        clone.start += oldMaxX - oldChange.start;
-        clone.end += oldMaxX - oldChange.start;
-    } else if (true) {
+    else if (oldChange.end + oldMovement <= clone.start) {
+        console.log("Revert 1")
+        clone.start -= oldMovement;
+        clone.end -= oldMovement;
+    } else if (clone.start < oldChange.start && clone.end < oldChange.end && clone.end > oldChange.start) {
+        console.log("Revert 2: ")
+        clone.end -= oldMovement;
+    } else if (clone.start <= oldChange.start && clone.end - oldMovement > oldChange.end) {
         console.log("Revert 3: ")
-    } else if (true) {
+        clone.end -= oldMovement;
+    } else if (clone.start > oldChange.start && clone.end > oldChange.end) {
         console.log("Revert 4: ")
+        clone.end -= oldMovement;
     } else if (true) {
         console.log("Revert 5: ")
     } else if (true) {
@@ -412,35 +422,9 @@ function revertChangeBackward(oldChange, change) {
         console.log("Revert 7: ")
     } else if (true) {
         console.log("Revert 8: ")
-    } else if (true) {
-        console.log("Revert 1: ")
     }
 
     return clone
-}
-
-function testChanges(sourceText, endText, changes) {
-    let newText = sourceText;
-    const advancedChanges = unappliedChanges.map((change, i, arr) => {
-        if (i === 0) return change;
-        let clone = structuredClone(change);
-        for(let j = 0; j < i; j++) {
-            clone = advanceChangeForward(arr[j], clone);
-        }
-        
-        return clone;
-    });
-    console.log("Testing", changes, advancedChanges);
-    for(const change of advancedChanges) {
-        newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);
-    }
-
-    if (endText === newText) console.log("%cChange Test passed", "background: green; color: white");
-    else {
-        console.log("%cChange Test failed", "background: red; color: white");
-        console.log(endText);
-        console.log(newText);
-    }
 }
 
 function changeLocalFilesAndUpdatePre(change) {
@@ -466,3 +450,159 @@ function changeLocalFilesAndUpdatePre(change) {
     if (currentFileName !== change.filename) return;
     notebook.querySelectorAll("pre")[change.cel].textContent = newText;
 }
+
+(() => {
+    const text = "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)";
+
+    // Case 0
+    test(
+        "X_tr123, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":4,"end":5,"data":"1"},
+            {"start":5,"end":6,"data":"2"},
+            {"start":6,"end":7,"data":"3"},
+        ],
+        [
+            {"start":4,"end":5,"data":"1"},
+            {"start":5,"end":6,"data":"2"},
+            {"start":6,"end":7,"data":"3"},
+        ]
+    );
+
+    test(
+        "X_train, X_test, y_train, y_test = train_5555555555(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":44,"end":47,"data":"123"},
+            {"start":43,"end":48,"data":"44444"},
+            {"start":41,"end":51,"data":"5555555555"},
+        ],
+        [
+            {"start":44,"end":47,"data":"123"},
+            {"start":43,"end":48,"data":"44444"},
+            {"start":41,"end":51,"data":"5555555555"},
+        ]
+    );
+
+    // Case 1
+    test(
+        ", , , y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":0,"end":7,"data":""},
+            {"start":2,"end":8,"data":""},
+            {"start":4,"end":11,"data":""},
+        ],
+        [
+            {"start":0,"end":7,"data":""},
+            {"start":9,"end":15,"data":""},
+            {"start":17,"end":24,"data":""},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = _split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":35,"end":36,"data":""},
+            {"start":35,"end":36,"data":""},
+            {"start":35,"end":43,"data":""},
+        ],
+        [
+            {"start":35,"end":36,"data":""},
+            {"start":36,"end":37,"data":""},
+            {"start":37,"end":45,"data":""},
+        ]
+    );
+    test(
+        "123, 456, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":0,"end":7,"data":"123"},
+            {"start":5,"end":8,"data":"4"},
+            {"start":6,"end":9,"data":"56"},
+        ],
+        [
+            {"start":0,"end":7,"data":"123"},
+            {"start":9,"end":12,"data":"4"},
+            {"start":12,"end":15,"data":"56"},
+        ]
+    );
+
+    // Case 2
+    test(
+        "X_train, 321, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":17,"end":24,"data":"111"},
+            {"start":12,"end":19,"data":"22"},
+            {"start":9,"end":13,"data":"3"},
+        ],
+        [
+            {"start":17,"end":24,"data":"111"},
+            {"start":12,"end":23,"data":"22"},
+            {"start":9,"end":22,"data":"3"},
+        ]
+    );
+
+    // Case 3
+    test(
+        "X_train, X_test, y_train, y_test = tra3333333y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":39,"end":44,"data":"2222"},
+            {"start":38,"end":51,"data":"3333333"},
+        ],
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":39,"end":47,"data":"2222"},
+            {"start":38,"end":55,"data":"3333333"},
+        ]
+    );
+
+    // Case 4
+    test(
+        "X_train, X_test, 1223_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":17,"end":24,"data":"111"},
+            {"start":18,"end":30,"data":"2222"},
+            {"start":20,"end":33,"data":"3"},
+        ],
+        [
+            {"start":17,"end":24,"data":"111"},
+            {"start":18,"end":34,"data":"2222"},
+            {"start":24,"end":45,"data":"3"},
+        ]
+    );
+
+
+    function test(finalText, advancedChanges, rootChanges) {
+        let cur = text;
+        for(const change of advancedChanges) {
+            cur = cur.substring(0, change.start) + change.data + cur.substring(change.end);
+        }
+
+        if (cur !== finalText) console.error("Advanced values are wrong");
+
+        const revertedClone = structuredClone(advancedChanges);
+        for(let i = revertedClone.length - 1; i > 0; i--) {
+            for(let j = i - 1; j >= 0; j--) {
+                revertedClone[i] = revertChangeBackward(revertedClone[j], revertedClone[i]);
+            }
+        }
+
+        if (JSON.stringify(revertedClone) !== JSON.stringify(rootChanges)) {
+            console.log("%cRoot convertion failed", "background: red;color:white");
+            console.log("Wrong: ", revertedClone);
+            console.log("Right: ", rootChanges);
+        } else console.log("%cRevert passed", "background: green;color:white");
+
+        const advancedClone = structuredClone(rootChanges);
+        for(let i = 1; i < advancedClone.length; i++) {
+            for(let j = 0; j < i; j++) {
+                advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+            }
+        }
+
+        if (JSON.stringify(advancedClone) !== JSON.stringify(advancedChanges)) {
+            console.log("%cAdvanced convertion failed", "background: red;color:white");
+            console.log("Wrong: ", advancedClone);
+            console.log("Right: ", advancedChanges);
+        } else console.log("%cAdvanced passed", "background: green;color:white");
+
+    }
+})();
