@@ -10,6 +10,7 @@ const lag = document.querySelector("#lag");
 const files = {};
 const allUnappliedChanges = {};
 let currentFileName = "";
+let currentKey = "";
 let currentCaretStart = 0;
 let currentCaretEnd = 0;
 let currentCelNumber = -1;
@@ -19,6 +20,20 @@ const socket = socketIO("http://localhost:4000/", {
         token({ token: "test" });
     }
 });
+
+window.addEventListener("resize", () => {
+    document.querySelectorAll("textarea").forEach(updateTextAreaHeight);
+});
+window.addEventListener("keydown", async (event) => {
+    if (event.ctrlKey && event.code === "KeyS") {
+        event.preventDefault();
+        // console.log(currentFileName)
+        const fileData = files[currentKey]?.[currentFileName];
+        if (fileData) {
+            await writeJsonDataToUserFile(fileData);
+        }
+    }
+})
 
 lag.addEventListener("click", async e => {
     socket.emit("lag", "data")
@@ -44,42 +59,6 @@ host.addEventListener("click", async e => {
     initLocalFileInfos(key, filesData);
     socketJoin(key);
 });
-
-function socketJoin(key) {
-    socket.on(`fileUpdates${key}`, change => {
-        const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
-        let needToUpdateCaret = change.cel === currentCelNumber && currentFileName === change.filename;
-        if(unappliedChanges.length) {
-            if (JSON.stringify(change) === JSON.stringify(unappliedChanges[0])) {
-                unappliedChanges.shift();
-                needToUpdateCaret = false;
-            }
-        } 
-
-        console.log("Changes", change, unappliedChanges)
-        changeTextarea([change, ...unappliedChanges]);
-        if (needToUpdateCaret) updateCaret(change);
-        for(let i = 0; i < unappliedChanges.length; i++) {
-            unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
-            unappliedChanges[i].id++;
-        }
-
-        const fileData = files[change.key][change.filename];
-        const cell = fileData.data.cells[change.cel];
-        const sourceText = cell.source;
-        cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
-        cell.id++;
-    });
-
-    function updateCaret(change) {
-        console.log("Caret")
-        if (change.end <= currentCaretStart) currentCaretStart += change.data.length - (change.end - change.start);
-        if (change.end <= currentCaretEnd) currentCaretEnd += change.data.length - (change.end - change.start);
-        
-        document.querySelectorAll("textarea")[currentCelNumber].selectionStart = currentCaretStart;
-        document.querySelectorAll("textarea")[currentCelNumber].selectionEnd = currentCaretEnd;
-    }
-}
 
 join.addEventListener("click", async e => {
     const roomKey = prompt("Enter room key");
@@ -132,6 +111,44 @@ join.addEventListener("click", async e => {
     initLocalFileInfos(roomKey, fetchedFiles.files);
     socketJoin(roomKey);
 });
+
+function socketJoin(key) {
+    socket.on(`fileUpdates${key}`, change => {
+        const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
+        let needToUpdateCaret = change.cel === currentCelNumber && currentFileName === change.filename;
+        if(unappliedChanges.length) {
+            if (JSON.stringify(change) === JSON.stringify(unappliedChanges[0])) {
+                unappliedChanges.shift();
+                needToUpdateCaret = false;
+            }
+        } 
+
+        console.log("Changes", change, unappliedChanges)
+        changeTextarea([change, ...unappliedChanges]);
+        if (needToUpdateCaret) updateCaret(change);
+        for(let i = 0; i < unappliedChanges.length; i++) {
+            unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
+            unappliedChanges[i].id++;
+        }
+
+        const fileData = files[change.key][change.filename];
+        const cell = fileData.data.cells[change.cel];
+        const sourceText = cell.source;
+        cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
+        cell.id++;
+    });
+
+    function updateCaret(change) {
+        console.log("Caret")
+        if (change.end <= currentCaretStart) currentCaretStart += change.data.length - (change.end - change.start);
+        if (change.end <= currentCaretEnd) currentCaretEnd += change.data.length - (change.end - change.start);
+        
+        document.querySelectorAll("textarea")[currentCelNumber].selectionStart = currentCaretStart;
+        document.querySelectorAll("textarea")[currentCelNumber].selectionEnd = currentCaretEnd;
+    }
+}
+
+
 
 function initLocalFileInfos(key, files) {
     for(const file of Object.values(files)) {
@@ -209,6 +226,7 @@ async function createFile(file, parentUl, fileNames, path) {
 function displayFileData(fileData) {
     notebook.textContent = "";
     currentFileName = fileData.name;
+    currentKey = fileData.key;
     for (let i = 0; i < fileData.data.cells.length; i++) {
         const block = fileData.data.cells[i];
         const textarea = createTextArea(i);
@@ -224,20 +242,6 @@ function displayFileData(fileData) {
         })
         notebook.append(textarea);
         updateTextAreaHeight(textarea);
-        if (fileData.handler) {
-            const save = document.createElement("button");
-            save.textContent = "Save";
-            save.addEventListener("click", async () => {
-                // const stream = await fileData.handler.createWritable();
-                // block.source = pre.innerText.split("\n").map(v => v + "\n");
-                // await stream.write(JSON.stringify( fileData.data, null, 4));
-                // await stream.close();
-                await writeJsonDataToUserFile(fileData);
-            })
-
-            notebook.append(save);
-        }
-        console.log(block);
     }
 }
 
@@ -315,10 +319,20 @@ function jsonDataCopyForServer(filesData) {
  * Row id numbers are only used to sync the file with the server, end will break the file if keps
  */
 async function writeJsonDataToUserFile(fileData) {
+    if(!fileData.handler) {
+        fileData.handler = await showSaveFilePicker();
+    }
+
+
+
     // Broken koska objecti muutos
     const clone = structuredClone(fileData.data);
     const stream = await fileData.handler.createWritable();
-    await stream.write(JSON.stringify(clone, null, 4));
+    for(const cell of clone.cells) {
+        cell.source = cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n");
+        delete cell.id;
+    }
+    await stream.write(JSON.stringify(clone, null, 2));
     await stream.close();
 }
 
