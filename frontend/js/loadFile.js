@@ -356,7 +356,7 @@ function advanceChangeForward(oldChange, change) {
         console.log("Revert 0: ")
         return clone;
     } else if (oldChange.end + oldMovement <= clone.start) {
-        console.log("Revert 1: ")
+        console.log("Revert 5: ")
         clone.start += oldMovement;
         clone.end += oldMovement;
     } else if (clone.start < oldChange.start && clone.end < oldChange.end && clone.end > oldChange.start) {
@@ -368,16 +368,23 @@ function advanceChangeForward(oldChange, change) {
     } else if (clone.start > oldChange.start && clone.end > oldChange.end) {
         console.log("Advance 4: ")
         clone.end += oldMovement;
-    } else if (true) {
-        console.log("Advance 5: ")
-    } else if (true) {
-        console.log("Advance 6: ")
-    } else if (true) {
+    } else if (oldChange.end <= oldChange.start) {
+        console.log("Advance 10: ")
+        clone.start -= oldMovement;
+        clone.start -= oldMovement;
+    } else if (oldMovement > 0 && clone.start < oldChange.start && oldChange.end + oldMovement > clone.end) {
         console.log("Advance 7: ")
+        clone.end += oldMovement;
+    }  else if (clone.start >= oldChange.start && curMaxX <= oldMaxX) {
+        console.error("Advance 8: ")
+        // clone.end += oldMovement;
     } else if (true) {
-        console.log("Advance 8: ")
+        console.error("Advance 9: ")
     } else if (true) {
-        console.log("Advance 1: ")
+        console.error("Advance 10: ")
+    } else if (clone.end <= oldChange.start) {
+        console.log("Advance 6: ")
+        return clone;
     }
 
     return clone
@@ -402,7 +409,7 @@ function revertChangeBackward(oldChange, change) {
         return clone;
     }
     else if (oldChange.end + oldMovement <= clone.start) {
-        console.log("Revert 1")
+        console.log("Revert 5")
         clone.start -= oldMovement;
         clone.end -= oldMovement;
     } else if (clone.start < oldChange.start && clone.end < oldChange.end && clone.end > oldChange.start) {
@@ -414,14 +421,23 @@ function revertChangeBackward(oldChange, change) {
     } else if (clone.start > oldChange.start && clone.end > oldChange.end) {
         console.log("Revert 4: ")
         clone.end -= oldMovement;
-    } else if (true) {
-        console.log("Revert 5: ")
-    } else if (true) {
-        console.log("Revert 6: ")
-    } else if (true) {
+    } else if (oldChange.end <= oldChange.start) {
+        console.log("Revert 10: ")
+        clone.start -= oldMovement;
+        clone.start -= oldMovement;
+    } else if (oldMovement > 0 && clone.start < oldChange.start && oldChange.end + oldMovement > clone.end) {
         console.log("Revert 7: ")
+        clone.end -= oldMovement;
+    }  else if (clone.start >= oldChange.start && curMaxX <= oldMaxX) {
+        console.error("Revert 8: ")
+        // clone.end -= oldMovement;
     } else if (true) {
-        console.log("Revert 8: ")
+        console.error("Revert 9: ")
+    } else if (true) {
+        console.error("Revert 10: ")
+    } else if (clone.end <= oldChange.start) {
+        console.log("Revert 6: ")
+        return clone;
     }
 
     return clone
@@ -468,7 +484,6 @@ function changeLocalFilesAndUpdatePre(change) {
             {"start":6,"end":7,"data":"3"},
         ]
     );
-
     test(
         "X_train, X_test, y_train, y_test = train_5555555555(X, y, test_size=0.2, random_state=42)",
         [
@@ -487,40 +502,27 @@ function changeLocalFilesAndUpdatePre(change) {
     test(
         ", , , y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":0,"end":7,"data":""},
-            {"start":2,"end":8,"data":""},
-            {"start":4,"end":11,"data":""},
-        ],
-        [
-            {"start":0,"end":7,"data":""},
-            {"start":9,"end":15,"data":""},
             {"start":17,"end":24,"data":""},
+            {"start":9,"end":15,"data":""},
+            {"start":0,"end":7,"data":""},
+        ],
+        [
+            {"start":17,"end":24,"data":""},
+            {"start":9,"end":15,"data":""},
+            {"start":0,"end":7,"data":""},
         ]
     );
     test(
-        "X_train, X_test, y_train, y_test = _split(X, y, test_size=0.2, random_state=42)",
+        "X_train, X_test, y_train, y_test = train_test(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":35,"end":36,"data":""},
-            {"start":35,"end":36,"data":""},
-            {"start":35,"end":43,"data":""},
+            {"start":50,"end":51,"data":""},
+            {"start":46,"end":50,"data":""},
+            {"start":45,"end":46,"data":""},
         ],
         [
-            {"start":35,"end":36,"data":""},
-            {"start":36,"end":37,"data":""},
-            {"start":37,"end":45,"data":""},
-        ]
-    );
-    test(
-        "123, 456, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
-        [
-            {"start":0,"end":7,"data":"123"},
-            {"start":5,"end":8,"data":"4"},
-            {"start":6,"end":9,"data":"56"},
-        ],
-        [
-            {"start":0,"end":7,"data":"123"},
-            {"start":9,"end":12,"data":"4"},
-            {"start":12,"end":15,"data":"56"},
+            {"start":50,"end":51,"data":""},
+            {"start":46,"end":50,"data":""},
+            {"start":45,"end":46,"data":""},
         ]
     );
 
@@ -569,6 +571,104 @@ function changeLocalFilesAndUpdatePre(change) {
         ]
     );
 
+    // Case 5
+    test(
+        ", , , y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":0,"end":7,"data":""},
+            {"start":2,"end":8,"data":""},
+            {"start":4,"end":11,"data":""},
+        ],
+        [
+            {"start":0,"end":7,"data":""},
+            {"start":9,"end":15,"data":""},
+            {"start":17,"end":24,"data":""},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = _split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":35,"end":36,"data":""},
+            {"start":35,"end":36,"data":""},
+            {"start":35,"end":43,"data":""},
+        ],
+        [
+            {"start":35,"end":36,"data":""},
+            {"start":36,"end":37,"data":""},
+            {"start":37,"end":45,"data":""},
+        ]
+    );
+    test(
+        "123, 456, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":0,"end":7,"data":"123"},
+            {"start":5,"end":8,"data":"4"},
+            {"start":6,"end":9,"data":"56"},
+        ],
+        [
+            {"start":0,"end":7,"data":"123"},
+            {"start":9,"end":12,"data":"4"},
+            {"start":12,"end":15,"data":"56"},
+        ]
+    );
+
+    // case 6
+    test(
+        "X_train, X_test, y_train, 33y_test = 2222train_111111test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":41,"data":"111111"},
+            {"start":35,"end":35,"data":"2222"},
+            {"start":26,"end":26,"data":"33"},
+        ],
+        [
+            {"start":41,"end":41,"data":"111111"},
+            {"start":35,"end":35,"data":"2222"},
+            {"start":26,"end":26,"data":"33"},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = 321train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":35,"end":35,"data":"1"},
+            {"start":35,"end":35,"data":"2"},
+            {"start":35,"end":35,"data":"3"},
+        ],
+        [
+            {"start":35,"end":35,"data":"1"},
+            {"start":35,"end":35,"data":"2"},
+            {"start":35,"end":35,"data":"3"},
+        ]
+    );
+
+    // Case 7
+    test(
+        "X_train7777744444411_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":10,"end":10,"data":"11111"},
+            {"start":9,"end":13,"data":"4444444"},
+            {"start":7,"end":10,"data":"77777"},
+        ],
+        [
+            {"start":10,"end":10,"data":"11111"},
+            {"start":9,"end":8,"data":"4444444"},
+            {"start":7,"end":2,"data":"77777"},
+        ]
+    );
+
+    // Case 8
+    test(
+        "X_train, X_test, y_train, y_test = 111111123333221111111(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":35,"end":51,"data":"111111111111111111"},
+            {"start":42,"end":46,"data":"222222"},
+            {"start":43,"end":46,"data":"3333"},
+        ],
+        [
+            {"start":35,"end":51,"data":"111111111111111111"},
+            {"start":42,"end":44,"data":"222222"},
+            {"start":43,"end":42,"data":"3333"},
+        ]
+    );
 
     function test(finalText, advancedChanges, rootChanges) {
         let cur = text;
