@@ -42,93 +42,28 @@ const socketConnection = (socket) => {
 					if (oldChange.id < change.id) continue;
 					if (oldChange.id > change.id) throw new Error("Invalid id");
 
-					const oldX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
-					const curX = Math.max(change.end, change.start + change.data.length);
-					// const curDiff = change.end - change.start + change.data.length;
-					if (oldX <= change.start) {
-						change.start -= oldChange.end - oldChange.start - oldChange.data.length
-						change.end -= oldChange.end - oldChange.start - oldChange.data.length
-					}
+					change = advanceChangeForward(oldChange, change);
 					change.id++;
 
-					// const delta = oldChange.end - change.
 					console.log("old: ", oldChange);
 				}
+
+				if (change.id !== fileData.data.cells[change.cel].id) throw new Error("Too old id");
 			}
 
-			// console.log("Wrongid: ", wrongIds)
-
-			// Modify changes if possible
-			// wrongID: for(const wrongIdChange of wrongIds) {
-			// 	for(const change of changeFilo.iterator()) {
-			// 		if(change.cel !== change.cel) continue;
-			// 		for(const oldChange of change.changes) {
-			// 			if (oldChange.row !== wrongIdChange.row) continue;
-			// 			if (oldChange.id >= wrongIdChange.id) {
-			// 				wrongIdChange.id++;
-			// 				if (oldChange.erase) {
-			// 					if (oldChange.char <= wrongIdChange.char && oldChange.char + oldChange.erase >= wrongIdChange.char + wrongIdChange.erase) {
-			// 						// ooooo  ooooo  ooooo  oooo
-			// 						// WW---  WWWWW  ---WW  -WW-
-			// 						wrongIdChange.char = 0;
-			// 						wrongIdChange.erase = 0;
-			// 						wrongIdChange.id = fileData.data.cells[change.cel].source[change.changes[0].row*2 + 1]
-			// 						continue wrongID;
-			// 					} else if (oldChange.char + oldChange.erase < wrongIdChange.char) {
-			// 						// oooo----WWWW
-			// 						wrongIdChange.char -= oldChange.erase;
-			// 					} else if(oldChange.char >= wrongIdChange.char && wrongIdChange.char + wrongIdChange.erase >= oldChange.char + oldChange.erase) {
-			// 						// oo---  ---oo  --oo--
-			// 						// WWWWW  WWWWW  WWWWWW
-			// 						wrongIdChange.erase -= oldChange.erase;
-			// 					} else if(wrongIdChange.char < oldChange.char && wrongIdChange.char + wrongIdChange.erase < oldChange.char + oldChange.erase) {
-			// 						// -oooo
-			// 						// WWW--
-			// 						wrongIdChange.erase = oldChange.char - wrongIdChange.char;
-			// 					} else if(oldChange.char < wrongIdChange.char && oldChange.char + oldChange.erase < wrongIdChange.char + wrongIdChange.erase) {
-			// 						// oooo-
-			// 						// --WWW
-			// 						wrongIdChange.char = oldChange.char + oldChange.erase;
-			// 					}
-			// 				}
-			// 			}
-			// 		}
 					
-	
-			// 		console.log("--->", change);
-			// 	}
-			// }
-			
-			// Validate changes
-			// for(const wrongChange of wrongIds) {
-			// 	const id = fileData.data.cells[change.cel].source[wrongChange.row*2 + 1];
-			// 	if (id !== wrongChange.id) throw new Error("Id in valid")
-			// }
-
-			// const block = fileData.data.cells[changes.cel].source;
-			// for (const change of changes.changes) {
-			// 	const row = block[change.row * 2]
-			// 	if (change.erase) {
-			// 		if (change.char == 0) {
-			// 			block[change.row * 2] = row.substring(change.char + change.erase);
-			// 		} else {
-			// 			block[change.row * 2] = row.substring(0, change.char) + row.substring(change.char + change.erase);
-			// 		}
-			// 		block[change.row * 2 + 1]++;
-			// 	}
-			// }
 
 			const sourceText = fileData.data.cells[change.cel].source;
 			const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
 			fileData.data.cells[change.cel].source = newText;
-    	fileData.data.cells[change.cel].id++;
+    		fileData.data.cells[change.cel].id++;
 
 
 			changeFilo.push(change);
 			// changeFilo.push(changes.changes);
 	
-			// socketIO.emit(socketKey, change);
-			socket.broadcast.emit(socketKey, change);
+			socketIO.emit(socketKey, change);
+			// socket.broadcast.emit(socketKey, change);
 		} catch (e) {
 			console.error(e)
 		}
@@ -140,5 +75,98 @@ const socketConnection = (socket) => {
 	// 	if (!valid) return;
 	// })
 };
+
+
+function advanceChangeForward(oldChange, change) {
+    const clone = structuredClone(change);
+    const oldDelta = oldChange.end - oldChange.start;
+    const curDelta = clone.end - clone.start;
+    const oldMovement = oldChange.data.length - oldDelta;
+    const curMovement = clone.data.length - curDelta;
+    const oldMaxX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
+    const curMaxX = Math.max(clone.end, clone.start + clone.data.length);
+    
+    // console.log(oldChange, change);
+    
+    if (oldMovement === 0) {
+        // console.log("Advanced 0: ")
+        return clone;
+    } else if (oldChange.end <= clone.start && !clone.stop) {
+        // console.log("Advanced 1: ")
+        clone.start += oldMovement;
+        clone.end += oldMovement;
+    } else if (oldChange.start >= clone.end && !clone.replaceEnd) {
+        // console.log("Advanced 2: ")
+        return clone;
+    } else if (clone.start <= oldChange.start && clone.end >= oldChange.end) {
+        // console.log("Advanced 3: ")
+        clone.end += oldMovement;
+    } else if (true) {
+        console.error("Advanced 4: ")
+    } else if (true) {
+        console.error("Advanced 5: ")
+    } else if (true) {
+        console.error("Advanced 6: ")
+    }  else if (true) {
+        console.error("Advanced 7: ")
+    } else if (true) {
+        console.error("Advanced 8: ")
+    } else if (true) {
+        console.error("Advanced 9: ")
+    } else if (true) {
+        console.error("Advanced 10: ")
+    }
+
+    return clone
+}
+
+
+function revertChangeBackward(oldChange, change) {
+    const clone = structuredClone(change);
+    const oldDelta = oldChange.end - oldChange.start;
+    const curDelta = clone.end - clone.start;
+    const oldMovement = oldChange.data.length - oldDelta;
+    const curMovement = clone.data.length - curDelta;
+    const oldMaxX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
+    const curMaxX = Math.max(clone.end, clone.start + clone.data.length);
+    // const currentMaxX = Math.max(clone.end, clone.start + clone.data.length);
+    // const charMovement = oldChange.data.length - (oldChange.end - oldChange.start);
+
+    // console.log(oldChange, change);
+
+    if (oldMovement === 0) {
+        // console.log("Revert 0: ")
+        return clone;
+    } else if (oldChange.end <= clone.start - oldMovement) {
+        // console.log("Revert 1: ")
+        clone.start -= oldMovement;
+        clone.end -= oldMovement;
+    } else if (oldChange.start >= clone.end) {
+        if (oldChange.end === clone.start) clone.stop = true;
+        // console.log("Revert 2: ")
+        return clone;
+    } else if (clone.start <= oldChange.start && clone.end - oldMovement >= oldChange.end) {
+        // console.log("Revert 3: ")
+        clone.end -= oldMovement;
+        if (oldChange.end === clone.start) clone.stop = true;
+        if (oldChange.end === clone.end) clone.replaceEnd = true;
+    } else if (true) {
+        console.error("Revert 4: ")
+    } else if (true) {
+        console.error("Revert 5: ")
+    } else if (true) {
+        console.error("Revert 6: ")
+    }  else if (true) {
+        console.error("Revert 7: ")
+    } else if (true) {
+        console.error("Revert 8: ")
+    } else if (true) {
+        console.error("Revert 9: ")
+    } else if (true) {
+        console.error("Revert 10: ")
+    }
+
+    return clone
+}
 
 module.exports = { socketConnection };

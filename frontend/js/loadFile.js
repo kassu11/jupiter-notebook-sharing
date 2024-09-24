@@ -40,12 +40,32 @@ host.addEventListener("click", async e => {
 
     console.log(jsonDataCopyForServer(filesData));
 
-
-
-    socket.on(`fileUpdates${key}`, e => {
-        changeLocalFilesAndUpdatePre(e);
-    })
+    socketJoin(key);
 });
+
+function socketJoin(key) {
+    socket.on(`fileUpdates${key}`, change => {
+        if(unappliedChanges.length) {
+            if (JSON.stringify(change) === JSON.stringify(unappliedChanges[0])) {
+                unappliedChanges.shift();
+            }
+        }
+
+        
+        console.log("Changes", change, unappliedChanges)
+        changeLocalFilesAndUpdatePre([change, ...unappliedChanges]);
+        for(let i = 0; i < unappliedChanges.length; i++) {
+            unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
+            unappliedChanges[i].id++;
+        }
+
+        const fileData = files[change.key][change.filename];
+        const cell = fileData.data.cells[change.cel];
+        const sourceText = cell.source;
+        cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
+        cell.id++;
+    })
+}
 
 join.addEventListener("click", async e => {
     const roomKey = prompt("Enter room key");
@@ -96,14 +116,7 @@ join.addEventListener("click", async e => {
     console.log(fetchedFiles, Object.entries(fileTreeObject));
 
 
-    socket.on(`fileUpdates${roomKey}`, e => {
-        changeLocalFilesAndUpdatePre(e);
-    })
-    // socket.on("post/" + key, e => {
-    //     console.log("Socket message", e)
-    // });
-
-    // socket.emit("post", {"test": 5})
+    socketJoin(roomKey);
 });
 loadButton.addEventListener("click", loadProjectFolder);
 

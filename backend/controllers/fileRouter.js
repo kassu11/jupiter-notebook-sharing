@@ -47,7 +47,7 @@ const hostFiles = async (req, res) => {
 		}
 		hostedFiles[key] = fileData;
 		for(const file of Object.values(fileData)) {
-			file.changes = new Filo(50);
+			file.changes = new Filo(20);
 		}
 		hostingUsers[id] = key;
 		// socketIO.emit("post/" + id, { likes: 1, dislikes: 2 });
