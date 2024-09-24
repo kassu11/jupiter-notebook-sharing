@@ -40,6 +40,7 @@ const socketConnection = (socket) => {
 				console.log("Wrong id");
 				for(const oldChange of changeFilo.iterator()) {
 					if (oldChange.id < change.id) continue;
+					if (oldChange.cel != change.cel) continue;
 					if (oldChange.id > change.id) throw new Error("Invalid id");
 
 					change = advanceChangeForward(oldChange, change);

@@ -8,7 +8,7 @@ const join = document.querySelector("#join");
 const lag = document.querySelector("#lag");
 
 const files = {};
-const unappliedChanges = [];
+const allUnappliedChanges = {};
 let currentFileName = "";
 let currentCaretStart = 0;
 let currentCaretEnd = 0;
@@ -40,18 +40,19 @@ host.addEventListener("click", async e => {
 
     console.log(jsonDataCopyForServer(filesData));
 
+    initLocalFileInfos(key, filesData);
     socketJoin(key);
 });
 
 function socketJoin(key) {
     socket.on(`fileUpdates${key}`, change => {
+        const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
         if(unappliedChanges.length) {
             if (JSON.stringify(change) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
             }
         }
 
-        
         console.log("Changes", change, unappliedChanges)
         changeLocalFilesAndUpdatePre([change, ...unappliedChanges]);
         for(let i = 0; i < unappliedChanges.length; i++) {
@@ -115,9 +116,21 @@ join.addEventListener("click", async e => {
 
     console.log(fetchedFiles, Object.entries(fileTreeObject));
 
-
+    initLocalFileInfos(roomKey, fetchedFiles.files);
     socketJoin(roomKey);
 });
+
+function initLocalFileInfos(key, files) {
+    for(const file of Object.values(files)) {
+        allUnappliedChanges[key + file.name] = [];
+        const row = allUnappliedChanges[key + file.name];
+        console.log(file.data.cells);
+        for(let i = 0; i < file.data.cells.length; i++) {
+            row[i] = {unappliedChanges: []};
+        }
+    }
+}
+
 loadButton.addEventListener("click", loadProjectFolder);
 
 async function loadProjectFolder() {
@@ -185,21 +198,21 @@ function displayFileData(fileData) {
     currentFileName = fileData.name;
     for (let i = 0; i < fileData.data.cells.length; i++) {
         const block = fileData.data.cells[i];
-        const pre = document.createElement("textarea");
-        pre.setAttribute("contenteditable", true);
-        pre.value = block.source;
+        const textarea = document.createElement("textarea");
+        textarea.setAttribute("contenteditable", true);
+        textarea.setAttribute("spellcheck", false);
+        textarea.value = block.source;
         let textBeforeInput = "";
 
-
-        pre.addEventListener("beforeinput", _ => {
-            textBeforeInput = pre.value;
+        textarea.addEventListener("beforeinput", _ => {
+            textBeforeInput = textarea.value;
         })
-        pre.addEventListener("input", _ => {
-            updateTextAreaHeight(pre);
-            changeInsideCell(fileData.key, fileData.name, i, textBeforeInput, pre.value)
+        textarea.addEventListener("input", _ => {
+            changeInsideCell(fileData.key, fileData.name, i, textBeforeInput, textarea.value)
+            updateTextAreaHeight(textarea);
         })
-        notebook.append(pre);
-        updateTextAreaHeight(pre);
+        notebook.append(textarea);
+        updateTextAreaHeight(textarea);
         if (fileData.handler) {
             const save = document.createElement("button");
             save.textContent = "Save";
@@ -265,11 +278,10 @@ function parseFileChanges(fileData) {
 }
 
 function changeInsideCell(key, filename, cellNum, beforeEditText, editedText) {
-    // console.log(key, filename, cellNum, editedText);
-
     if (beforeEditText === editedText) return;
 
     const change = {key, cel: cellNum, filename, id: files[key][filename].data.cells[cellNum].id};
+    const unappliedChanges = allUnappliedChanges[key + filename][cellNum].unappliedChanges;
 
     let firstUnchangedChar = -1;
     let lastUnchangedChar = -1;
@@ -333,42 +345,10 @@ function changeInsideCell(key, filename, cellNum, beforeEditText, editedText) {
         revertedChange = revertChangeBackward(advancedClone[i], revertedChange);
     }
 
-
-    // const advancedChanges = unappliedChanges.map((change, i, arr) => {
-    //     if (i === 0) return change;
-    //     let clone = structuredClone(change);
-    //     for(let j = 0; j < i; j++) {
-    //         clone = advanceChangeForward(arr[j], clone);
-    //     }
-
-    //     return clone;
-    // });
-
-    // advancedChanges.push(change);
-    
-
-    // const revertedChange = advancedChanges.reduce((acc, _, index, arr) => {
-    //     if (index === arr.length - 1) return acc;
-    //     return revertChangeBackward(arr.at(-index - 2), acc);
-    // }, change);
-
     unappliedChanges.push(revertedChange);
     
-    // test(beforeEditText, change);
     changeLocalFilesAndUpdatePre(unappliedChanges);
     socket.emit("changeFile", revertedChange);
-
-    const fileData = files[change.key][change.filename];
-    const sourceText = fileData.data.cells[change.cel].source;
-    // testChanges(sourceText, editedText, unappliedChanges);
-    
-
-    function test(t, c) {
-        const value = t.substring(0, c.start) + c.data + t.substring(c.end);
-        console.log("Testing print: ", value == editedText);
-        console.log(value);
-        console.log(editedText);
-    }
 }
 
 function advanceChangeForward(oldChange, change) {
