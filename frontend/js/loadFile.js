@@ -12,6 +12,7 @@ const allUnappliedChanges = {};
 let currentFileName = "";
 let currentCaretStart = 0;
 let currentCaretEnd = 0;
+let currentCelNumber = -1;
 
 const socket = socketIO("http://localhost:4000/", {
     auth: (token) => {
@@ -47,14 +48,17 @@ host.addEventListener("click", async e => {
 function socketJoin(key) {
     socket.on(`fileUpdates${key}`, change => {
         const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
+        let needToUpdateCaret = change.cel === currentCelNumber && currentFileName === change.filename;
         if(unappliedChanges.length) {
             if (JSON.stringify(change) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
+                needToUpdateCaret = false;
             }
-        }
+        } 
 
         console.log("Changes", change, unappliedChanges)
-        changeLocalFilesAndUpdatePre([change, ...unappliedChanges]);
+        changeTextarea([change, ...unappliedChanges]);
+        if (needToUpdateCaret) updateCaret(change);
         for(let i = 0; i < unappliedChanges.length; i++) {
             unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
             unappliedChanges[i].id++;
@@ -65,7 +69,16 @@ function socketJoin(key) {
         const sourceText = cell.source;
         cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
         cell.id++;
-    })
+    });
+
+    function updateCaret(change) {
+        console.log("Caret")
+        if (change.end <= currentCaretStart) currentCaretStart += change.data.length - (change.end - change.start);
+        if (change.end <= currentCaretEnd) currentCaretEnd += change.data.length - (change.end - change.start);
+        
+        document.querySelectorAll("textarea")[currentCelNumber].selectionStart = currentCaretStart;
+        document.querySelectorAll("textarea")[currentCelNumber].selectionEnd = currentCaretEnd;
+    }
 }
 
 join.addEventListener("click", async e => {
@@ -198,9 +211,7 @@ function displayFileData(fileData) {
     currentFileName = fileData.name;
     for (let i = 0; i < fileData.data.cells.length; i++) {
         const block = fileData.data.cells[i];
-        const textarea = document.createElement("textarea");
-        textarea.setAttribute("contenteditable", true);
-        textarea.setAttribute("spellcheck", false);
+        const textarea = createTextArea(i);
         textarea.value = block.source;
         let textBeforeInput = "";
 
@@ -228,12 +239,56 @@ function displayFileData(fileData) {
         }
         console.log(block);
     }
+}
 
+function updateTextAreaHeight(textarea) {
+    textarea.style.height = "0px";
+    textarea.style.height = textarea.scrollHeight + 5 + "px";
+}
 
-    function updateTextAreaHeight(textarea) {
-        textarea.style.height = "0px";
-        textarea.style.height = textarea.scrollHeight + 5 + "px";
+function createTextArea(cellNum) {
+    const textarea = document.createElement("textarea");
+
+    textarea.setAttribute("contenteditable", true);
+    textarea.setAttribute("spellcheck", false);
+
+    textarea.addEventListener("focus", focus, {once: true});
+
+    function focus() {
+        currentCelNumber = cellNum;
+
+        textarea.addEventListener("keydown", checkcaret);
+        textarea.addEventListener("mousedown", checkcaret);
+        textarea.addEventListener("touchstart", checkcaret);
+        textarea.addEventListener("input", checkcaret);
+        textarea.addEventListener("paste", checkcaret);
+        textarea.addEventListener("cut", checkcaret);
+        textarea.addEventListener("mousemove", checkcaret);
+        textarea.addEventListener("select", checkcaret);
+        textarea.addEventListener("selectstart", checkcaret);
+        textarea.addEventListener("blur", blur, {once: true});
     }
+
+    function blur() {
+        textarea.addEventListener("keydown", checkcaret);
+        textarea.addEventListener("mousedown", checkcaret);
+        textarea.addEventListener("touchstart", checkcaret);
+        textarea.addEventListener("input", checkcaret);
+        textarea.addEventListener("paste", checkcaret);
+        textarea.addEventListener("cut", checkcaret);
+        textarea.addEventListener("mousemove", checkcaret);
+        textarea.addEventListener("select", checkcaret);
+        textarea.addEventListener("selectstart", checkcaret);
+        textarea.addEventListener("focus", focus, {once: true});
+    }
+
+    function checkcaret() {
+        currentCaretStart = textarea.selectionStart;
+        currentCaretEnd = textarea.selectionEnd;
+        // console.log(textarea.selectionStart, textarea.selectionEnd);
+    }
+
+    return textarea
 }
 
 /**
@@ -347,7 +402,7 @@ function changeInsideCell(key, filename, cellNum, beforeEditText, editedText) {
 
     unappliedChanges.push(revertedChange);
     
-    changeLocalFilesAndUpdatePre(unappliedChanges);
+    changeTextarea(unappliedChanges);
     socket.emit("changeFile", revertedChange);
 }
 
@@ -443,7 +498,7 @@ function revertChangeBackward(oldChange, change) {
     return clone
 }
 
-function changeLocalFilesAndUpdatePre(rootChanges) {
+function changeTextarea(rootChanges) {
     console.log("Change pre element", rootChanges);
 
     const advancedClone = structuredClone(rootChanges);
@@ -465,23 +520,11 @@ function changeLocalFilesAndUpdatePre(rootChanges) {
         newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);
     }
 
-    // fileData.data.cells[change.cel].source = newText;
-    // fileData.data.cells[change.cel].id++;
-    // for(const change of changes.changes) {
-    //     const row = block[change.row * 2]
-    //     if (change.erase) {
-    //         if (change.char == 0) {
-    //             block[change.row * 2] = row.substring(change.char + change.erase);
-    //         } else {
-    //             block[change.row * 2] = row.substring(0, change.char) + row.substring(change.char + change.erase);
-    //         }
-    //         block[change.row * 2 + 1]++;
-    //     }
-    // }
-
     if(cellNum === -1) return;
     console.log("????")
-    notebook.querySelectorAll("textarea")[cellNum].value = newText;
+    const textarea = notebook.querySelectorAll("textarea")[cellNum];
+    textarea.value = newText;
+    updateTextAreaHeight(textarea);
 }
 
 (() => {
