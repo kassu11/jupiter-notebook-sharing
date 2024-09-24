@@ -14,7 +14,7 @@ const socketConnection = (socket) => {
 
 	socket.on("lag", _ => {
 		const date = new Date();
-		const delay = date.setSeconds(date.getSeconds() + 15);
+		const delay = date.setSeconds(date.getSeconds() + 4);
 
 		while(new Date().getTime() < delay) {
 
