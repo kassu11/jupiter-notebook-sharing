@@ -10,6 +10,8 @@ const lag = document.querySelector("#lag");
 const files = {};
 const unappliedChanges = [];
 let currentFileName = "";
+let currentCaretStart = 0;
+let currentCaretEnd = 0;
 
 const socket = socketIO("http://localhost:4000/", {
     auth: (token) => {
@@ -170,32 +172,21 @@ function displayFileData(fileData) {
     currentFileName = fileData.name;
     for (let i = 0; i < fileData.data.cells.length; i++) {
         const block = fileData.data.cells[i];
-        const pre = document.createElement("pre");
+        const pre = document.createElement("textarea");
         pre.setAttribute("contenteditable", true);
-        pre.textContent = block.source;
+        pre.value = block.source;
         let textBeforeInput = "";
 
-        pre.addEventListener("paste", (event) => {
-            event.preventDefault();
-            const textBeforeEdit = pre.innerText;
-
-            const paste = (event.clipboardData || window.clipboardData).getData("text");
-            const selection = window.getSelection();
-            if (!selection.rangeCount) return;
-            selection.deleteFromDocument();
-            selection.getRangeAt(0).insertNode(document.createTextNode(paste));
-            selection.collapseToEnd();
-
-            changeInsideCell(fileData.key, fileData.name, i, textBeforeEdit, pre.innerText)
-        });
 
         pre.addEventListener("beforeinput", _ => {
-            textBeforeInput = pre.innerText;
+            textBeforeInput = pre.value;
         })
         pre.addEventListener("input", _ => {
-            changeInsideCell(fileData.key, fileData.name, i, textBeforeInput, pre.innerText)
+            updateTextAreaHeight(pre);
+            changeInsideCell(fileData.key, fileData.name, i, textBeforeInput, pre.value)
         })
         notebook.append(pre);
+        updateTextAreaHeight(pre);
         if (fileData.handler) {
             const save = document.createElement("button");
             save.textContent = "Save";
@@ -212,6 +203,11 @@ function displayFileData(fileData) {
         console.log(block);
     }
 
+
+    function updateTextAreaHeight(textarea) {
+        textarea.style.height = "0px";
+        textarea.style.height = textarea.scrollHeight + 5 + "px";
+    }
 }
 
 /**
@@ -307,28 +303,47 @@ function changeInsideCell(key, filename, cellNum, beforeEditText, editedText) {
         return val;
     }));
 
-    const advancedChanges = unappliedChanges.map((change, i, arr) => {
-        if (i === 0) return change;
-        let clone = structuredClone(change);
+    const advancedClone = structuredClone(unappliedChanges);
+    for(let i = 1; i < advancedClone.length; i++) {
         for(let j = 0; j < i; j++) {
-            clone = advanceChangeForward(arr[j], clone);
+            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
         }
+    }
 
-        return clone;
+    advancedClone.forEach(change => {
+        delete change.stop;
+        delete change.replaceEnd;
     });
 
-    advancedChanges.push(change);
+    let revertedChange = structuredClone(change);
+    for(let i = advancedClone.length - 1; i >= 0; i--) {
+        revertedChange = revertChangeBackward(advancedClone[i], revertedChange);
+    }
 
-    const revertedChange = advancedChanges.reduce((acc, _, index, arr) => {
-        if (index === arr.length - 1) return acc;
-        return revertChangeBackward(arr.at(-index - 2), acc);
-    }, change);
+
+    // const advancedChanges = unappliedChanges.map((change, i, arr) => {
+    //     if (i === 0) return change;
+    //     let clone = structuredClone(change);
+    //     for(let j = 0; j < i; j++) {
+    //         clone = advanceChangeForward(arr[j], clone);
+    //     }
+
+    //     return clone;
+    // });
+
+    // advancedChanges.push(change);
+    
+
+    // const revertedChange = advancedChanges.reduce((acc, _, index, arr) => {
+    //     if (index === arr.length - 1) return acc;
+    //     return revertChangeBackward(arr.at(-index - 2), acc);
+    // }, change);
 
     unappliedChanges.push(revertedChange);
     
-    test(beforeEditText, change);
-    // changeLocalFilesAndUpdatePre(change);
-    // socket.emit("changeFile", change);
+    // test(beforeEditText, change);
+    changeLocalFilesAndUpdatePre(unappliedChanges);
+    socket.emit("changeFile", revertedChange);
 
     const fileData = files[change.key][change.filename];
     const sourceText = fileData.data.cells[change.cel].source;
@@ -352,20 +367,21 @@ function advanceChangeForward(oldChange, change) {
     const oldMaxX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
     const curMaxX = Math.max(clone.end, clone.start + clone.data.length);
     
-    console.log(oldChange, change);
+    // console.log(oldChange, change);
     
     if (oldMovement === 0) {
-        console.log("Advanced 0: ")
+        // console.log("Advanced 0: ")
         return clone;
     } else if (oldChange.end <= clone.start && !clone.stop) {
-        console.log("Advanced 1: ")
+        // console.log("Advanced 1: ")
         clone.start += oldMovement;
         clone.end += oldMovement;
-    } else if (oldChange.start >= clone.end) {
-        console.log("Advanced 2: ")
+    } else if (oldChange.start >= clone.end && !clone.replaceEnd) {
+        // console.log("Advanced 2: ")
         return clone;
-    } else if (true) {
-        console.error("Advanced 3: ")
+    } else if (clone.start <= oldChange.start && clone.end >= oldChange.end) {
+        // console.log("Advanced 3: ")
+        clone.end += oldMovement;
     } else if (true) {
         console.error("Advanced 4: ")
     } else if (true) {
@@ -397,21 +413,24 @@ function revertChangeBackward(oldChange, change) {
     // const currentMaxX = Math.max(clone.end, clone.start + clone.data.length);
     // const charMovement = oldChange.data.length - (oldChange.end - oldChange.start);
 
-    console.log(oldChange, change);
+    // console.log(oldChange, change);
 
     if (oldMovement === 0) {
-        console.log("Revert 0: ")
+        // console.log("Revert 0: ")
         return clone;
     } else if (oldChange.end <= clone.start - oldMovement) {
-        console.log("Revert 1: ", oldChange.start, oldMovement, clone.start)
+        // console.log("Revert 1: ")
         clone.start -= oldMovement;
         clone.end -= oldMovement;
     } else if (oldChange.start >= clone.end) {
         if (oldChange.end === clone.start) clone.stop = true;
-        console.log("Revert 2: ")
+        // console.log("Revert 2: ")
         return clone;
-    } else if (true) {
-        console.error("Revert 3: ")
+    } else if (clone.start <= oldChange.start && clone.end - oldMovement >= oldChange.end) {
+        // console.log("Revert 3: ")
+        clone.end -= oldMovement;
+        if (oldChange.end === clone.start) clone.stop = true;
+        if (oldChange.end === clone.end) clone.replaceEnd = true;
     } else if (true) {
         console.error("Revert 4: ")
     } else if (true) {
@@ -431,12 +450,28 @@ function revertChangeBackward(oldChange, change) {
     return clone
 }
 
-function changeLocalFilesAndUpdatePre(change) {
-    console.log("Change pre element", change)
+function changeLocalFilesAndUpdatePre(rootChanges) {
+    console.log("Change pre element", rootChanges);
 
-    const fileData = files[change.key][change.filename];
-    const sourceText = fileData.data.cells[change.cel].source;
-    const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
+    const advancedClone = structuredClone(rootChanges);
+    for(let i = 1; i < advancedClone.length; i++) {
+        for(let j = 0; j < i; j++) {
+            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+        }
+    }
+
+    let newText = null;
+    let cellNum = -1;
+    for(const change of advancedClone) {
+        if (currentFileName !== change.filename) return;
+        if(newText === null) {
+            const fileData = files[change.key][change.filename];
+            newText = fileData.data.cells[change.cel].source;
+            cellNum = change.cel;
+        }
+        newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);
+    }
+
     // fileData.data.cells[change.cel].source = newText;
     // fileData.data.cells[change.cel].id++;
     // for(const change of changes.changes) {
@@ -451,8 +486,9 @@ function changeLocalFilesAndUpdatePre(change) {
     //     }
     // }
 
-    if (currentFileName !== change.filename) return;
-    notebook.querySelectorAll("pre")[change.cel].textContent = newText;
+    if(cellNum === -1) return;
+    console.log("????")
+    notebook.querySelectorAll("textarea")[cellNum].value = newText;
 }
 
 (() => {
@@ -610,8 +646,8 @@ function changeLocalFilesAndUpdatePre(change) {
         "X_train, X_test, y_train, y_test = 321train_test_split(X, y, test_size=0.2, random_state=42)",
         [
             {"start":35,"end":35,"data":"1"},
-            {"start":35,"end":35,"data":"2"},
-            {"start":35,"end":35,"data":"3"},
+            {"start":35,"end":35,"data":"2", "stop": true},
+            {"start":35,"end":35,"data":"3", "stop": true},
         ],
         [
             {"start":35,"end":35,"data":"1"},
@@ -619,7 +655,87 @@ function changeLocalFilesAndUpdatePre(change) {
             {"start":35,"end":35,"data":"3", "stop": true},
         ]
     );
+    test(
+        "X_train, X_test, y_train, y_test = 789456123train_test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":35,"end":35,"data":"123"},
+            {"start":35,"end":35,"data":"456", stop: true},
+            {"start":35,"end":35,"data":"789", stop: true},
+        ],
+        [
+            {"start":35,"end":35,"data":"123"},
+            {"start":35,"end":35,"data":"456", stop: true},
+            {"start":35,"end":35,"data":"789", stop: true},
+        ]
+    );
     
+    // Case 3
+    test(
+        "X_train, X_test, y_train, y_test = trai2222t(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":39,"end":47,"data":"2222"},
+        ],
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":39,"end":50,"data":"2222"},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = train_2222t(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":41,"end":47,"data":"2222"},
+        ],
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":41,"end":50,"data":"2222"},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = t2222_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":36,"end":42,"data":"2222", replaceEnd: true},
+        ],
+        [
+            {"start":41,"end":45,"data":"1"},
+            {"start":36,"end":45,"data":"2222", replaceEnd: true},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = trai222222222222st_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":41,"data":"1111111"},
+            {"start":39,"end":50,"data":"222222222222"},
+        ],
+        [
+            {"start":41,"end":41,"data":"1111111"},
+            {"start":39,"end":43,"data":"222222222222"},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = train_222222222222st_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":41,"data":"1111111"},
+            {"start":41,"end":50,"data":"222222222222", stop: true},
+        ],
+        [
+            {"start":41,"end":41,"data":"1111111"},
+            {"start":41,"end":43,"data":"222222222222", stop: true},
+        ]
+    );
+    test(
+        "X_train, X_test, y_train, y_test = 22222222222222222test_split(X, y, test_size=0.2, random_state=42)",
+        [
+            {"start":41,"end":41,"data":"1111111"},
+            {"start":35,"end":48,"data":"22222222222222222", replaceEnd: true},
+        ],
+        [
+            {"start":41,"end":41,"data":"1111111"},
+            {"start":35,"end":41,"data":"22222222222222222", replaceEnd: true},
+        ]
+    );
 
     function test(finalText, advancedChanges, rootChanges) {
         let cur = text;
@@ -649,11 +765,16 @@ function changeLocalFilesAndUpdatePre(change) {
             }
         }
 
-        if (JSON.stringify(advancedClone, (key, v) => key == "stop" ? undefined : v) !== JSON.stringify(advancedChanges)) {
+        if (JSON.stringify(advancedClone) !== JSON.stringify(advancedChanges)) {
             console.log("%cAdvanced convertion failed", "background: red;color:white");
             console.log("Wrong: ", advancedClone);
             console.log("Right: ", advancedChanges);
         } else console.log("%cAdvanced passed", "background: green;color:white");
-
     }
 })();
+
+Object.assign(globalThis.String.prototype, {
+    str: function(change) {
+        return this.substring(0, change.start) + change.data + this.substring(change.end);
+    }
+})
