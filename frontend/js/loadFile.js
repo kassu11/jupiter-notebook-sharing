@@ -57,13 +57,14 @@ setInterval(async () => {
                         localCells[i].cell_type = fileCells[j].cell_type;
                         localCells[i].outputs = fileCells[j].outputs;
                         localCells[i].execution_count = fileCells[j].execution_count;
+                        if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
 
                         changeInsideCell(
                             fileData.key,
                             fileData.name,
                             localCells[i].merge_id,
                             localCells[i].source,
-                            fileCells[j].source.join("")
+                            fileCells[j].source
                         )
 
                         fileCells.splice(j, 1);
@@ -261,7 +262,7 @@ async function createFile(file, parentUl, fileNames, path) {
     const jsonData = JSON.parse(fileData);
     let i = 0;
     for(const cell of jsonData.cells) {
-        cell.source = cell.source.join("");
+        if (Array.isArray(cell.source)) cell.source = cell.source.join("");
         cell.id = 0;
         cell.merge_id = i++;
     }
@@ -301,7 +302,7 @@ function updateTextAreaHeight(textarea) {
     textarea.style.height = textarea.scrollHeight + 5 + "px";
 }
 
-function createTextArea(cellNum) {
+function createTextArea(cellId) {
     const textarea = document.createElement("textarea");
 
     textarea.setAttribute("contenteditable", true);
@@ -310,7 +311,7 @@ function createTextArea(cellNum) {
     textarea.addEventListener("focus", focus, {once: true});
 
     function focus() {
-        currentCelNumber = cellNum;
+        currentCelNumber = cellId;
 
         textarea.addEventListener("keydown", checkcaret);
         textarea.addEventListener("mousedown", checkcaret);
@@ -384,6 +385,7 @@ async function writeJsonDataToUserFile(fileData) {
     const clone = structuredClone(fileData.data);
     for(const cell of clone.cells) {
         cell.source = cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n");
+        if (cell.source.length <= 1) cell.source = cell.join("");
         delete cell.id;
     }
     const stream = await fileData.handler.createWritable();
