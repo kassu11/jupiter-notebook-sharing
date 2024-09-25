@@ -27,6 +27,7 @@ const socketConnection = (socket) => {
 			// console.log(change);
 			const socketKey = `fileUpdates${change.key}`
 			const fileData = hostedFiles[change.key][change.filename];
+            const cell = fileData.data.cells.find(v => v.merge_id === change.cel);
 			const changeFilo = fileData.changes;
 	
 			// console.log(hostedFiles[changes.key][changes.filename].changes.iterator());
@@ -36,7 +37,7 @@ const socketConnection = (socket) => {
 			// 	return change.id !== id;
 			// });
 
-			if(fileData.data.cells[change.cel].id !== change.id) {
+			if(cell.id !== change.id) {
 				console.log("Wrong id");
 				for(const oldChange of changeFilo.iterator()) {
 					if (oldChange.id < change.id) continue;
@@ -49,15 +50,13 @@ const socketConnection = (socket) => {
 					console.log("old: ", oldChange);
 				}
 
-				if (change.id !== fileData.data.cells[change.cel].id) throw new Error("Too old id");
+				if (change.id !== cell.id) throw new Error("Too old id");
 			}
 
-					
-
-			const sourceText = fileData.data.cells[change.cel].source;
+			const sourceText = cell.source;
 			const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
-			fileData.data.cells[change.cel].source = newText;
-    		fileData.data.cells[change.cel].id++;
+			cell.source = newText;
+    		cell.id++;
 
 
 			changeFilo.push(change);
