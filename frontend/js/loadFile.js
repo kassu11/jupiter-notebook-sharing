@@ -40,10 +40,48 @@ setInterval(async () => {
     for(const fileData of allFileHandlers) {
         const file = await fileData.handler.getFile();
         if (file.lastModified !== fileData.lastModified) {
+            fileData.lastModified = file.lastModified;
+            const fileText = await file.text();
+            const jsonData = JSON.parse(fileText);
+
+            const localCells = [...fileData.data.cells];
+            const fileCells = [...jsonData.cells];
+
+            let i = 0;
+            main: while(i < localCells.length) {
+                if (localCells[i]?.merge_id == null) continue;
+                for(let j = 0; j < fileCells.length; j++) {
+                    // console.log(localCells[i]?.merge_id, fileCells[j]?.merge_id)
+                    if (localCells[i]?.merge_id === fileCells[j]?.merge_id) {
+                        localCells[i].metadata = fileCells[j].metadata;
+                        localCells[i].cell_type = fileCells[j].cell_type;
+                        localCells[i].outputs = fileCells[j].outputs;
+                        localCells[i].execution_count = fileCells[j].execution_count;
+
+                        changeInsideCell(
+                            fileData.key,
+                            fileData.name,
+                            localCells[i].merge_id,
+                            localCells[i].source,
+                            fileCells[j].source.join("")
+                        )
+
+                        fileCells.splice(j, 1);
+                        localCells.splice(i, 1);
+                        continue main;
+                    }
+
+                }
+                
+                console.log("merge id not found: ", localCells[0]);
+                i++;
+            }
+
+
             console.log(fileData.name, file.lastModified);
         }
     }
-}, 1000);
+}, 100);
 
 
 lag.addEventListener("click", async e => {
@@ -350,6 +388,8 @@ async function writeJsonDataToUserFile(fileData) {
     }
     const stream = await fileData.handler.createWritable();
     await stream.write(JSON.stringify(clone, null, 2));
+    const file = await fileData.handler.getFile();
+    fileData.lastModified = file.lastModified;
     await stream.close();
 }
 
