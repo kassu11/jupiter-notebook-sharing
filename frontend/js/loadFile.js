@@ -281,10 +281,33 @@ function displayFileData(fileData) {
     currentFileName = fileData.name;
     currentKey = fileData.key;
     for (const cell of fileData.data.cells) {
+        const cellContainer = document.createElement("div");
+        cellContainer.classList.add("cell");
+        
+        const typeSelection = document.createElement("select");
+        const markdownOption = document.createElement("option");
+        markdownOption.value = "markdown";
+        markdownOption.textContent = "Markdown";
+        const codeOption = document.createElement("option");
+        codeOption.value = "code";
+        codeOption.textContent = "Code";
+        typeSelection.append(markdownOption, codeOption);
+        typeSelection.value = cell.cell_type;
+
+        const buttonContainer = document.createElement("div");
+        buttonContainer.classList.add("buttonContainer");
+        const upButton = document.createElement("button");
+        upButton.textContent = "Up";
+        const downButton = document.createElement("button");
+        downButton.textContent = "Down";
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        buttonContainer.append(upButton, downButton, deleteButton);
+
         const textarea = createTextArea(cell.merge_id);
         textarea.value = cell.source;
+        
         let textBeforeInput = "";
-
         textarea.addEventListener("beforeinput", _ => {
             textBeforeInput = textarea.value;
         })
@@ -292,7 +315,49 @@ function displayFileData(fileData) {
             changeInsideCell(fileData.key, fileData.name, cell.merge_id, textBeforeInput, textarea.value)
             updateTextAreaHeight(textarea);
         })
-        notebook.append(textarea);
+
+        cellContainer.append(typeSelection, textarea, buttonContainer);
+
+
+        if (cell.outputs?.length) {
+            const outputContainer = document.createElement("details");
+            outputContainer.classList.add("outputContainer")
+            outputContainer.setAttribute("open", "")
+            const summary = document.createElement("summary");
+            summary.textContent = "Hide output";
+            outputContainer.append(summary);
+            for(const {text, data, ...output} of cell.outputs) {
+                if (data) {
+                    if ("image/png" in data) {
+                        const img = document.createElement("img");
+                        img.src = `data:image/png;base64,${data["image/png"]}`;
+                        outputContainer.append(img);
+                    }
+                    else if ("text/html" in data) {
+                        const outputContent = document.createElement("div");
+                        if (Array.isArray(data["text/html"])) outputContent.innerHTML = data["text/html"].join("");
+                        else outputContent.innerHTML = data["text/html"];
+                        outputContainer.append(outputContent);
+                    }
+                    else if ("text/plain" in data) {
+                        const pre = document.createElement("pre");
+                        if (Array.isArray(data["text/plain"])) pre.textContent = data["text/plain"].join("");
+                        else pre.textContent = data["text/plain"];
+                        outputContainer.append(pre)
+                    }
+                } else if (text) {
+                    const pre = document.createElement("pre");
+                    if (Array.isArray(text)) pre.textContent = text.join("");
+                    else pre.textContent = text;
+                    outputContainer.append(pre)
+                }
+            }
+            cellContainer.append(outputContainer)
+        }
+
+        
+
+        notebook.append(cellContainer);
         updateTextAreaHeight(textarea);
     }
 }
