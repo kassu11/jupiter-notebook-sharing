@@ -21,6 +21,46 @@ const socketConnection = (socket) => {
 		}
 	});
 
+
+	socket.on("cellChange", change => {
+		// console.log("Change start")
+		try {
+			// console.log(change);
+			const socketKey = `cellChange${change.key}`
+			const fileData = hostedFiles[change.key][change.filename];
+            const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+            if (cellIndex === -1) throw new Error("Invalid cell ID");
+
+            if (change.type === "delete") {
+                fileData.data.cells.splice(cellIndex, 1);
+                socketIO.emit(socketKey, change);
+            } else if(change.type === "add") {
+                const newCellId = fileData.data.cells.reduce((acc, cell) => Math.max( cell.merge_id, acc ), 1) + 1;
+                const newCell = {
+                    source: "",
+                    cell_type: "code",
+                    merge_id: newCellId,
+                    id: 0,
+                };
+                fileData.data.cells.splice(cellIndex + 1, 0, newCell);
+                socketIO.emit(socketKey, {...change, data : newCell});
+            } else if(change.type === "moveUp") {
+                if (cellIndex === 0) throw new Error("Can't move cell up");
+                [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
+                socketIO.emit(socketKey, change);
+            } else if(change.type === "moveDown") {
+                if (cellIndex === fileData.data.cells.length - 1) throw new Error("Can't move cell down");
+                [fileData.data.cells[cellIndex + 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex + 1]]
+                socketIO.emit(socketKey, change);
+            } else if(change.type === "changeType") {
+                fileData.data.cells[cellIndex].cell_type = change.newType;
+                socketIO.emit(socketKey, change);
+            }
+	
+		} catch (e) {
+			console.error(e)
+		}
+	});
 	socket.on("changeFile", change => {
 		// console.log("Change start")
 		try {

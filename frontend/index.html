@@ -7,13 +7,19 @@
     <link rel="stylesheet" href="./css/index.css">
 </head>
 <body>
-    <button id="openProjectFolder">Open project folder</button>
-    <button id="host">Host</button>
-    <button id="join">Join</button>
-    <button id="lag">5 sec lag spike</button>
-    <div class="content">
-        <ul id="fileTree"></ul>
-        <div id="notebook"></div>
+    <div id="root">
+        <div class="header">
+            <button id="openProjectFolder">Open project folder</button>
+            <button id="host">Host</button>
+            <button id="join">Join</button>
+            <button id="lag">5 sec lag spike</button>
+        </div>
+        <div class="content">
+            <div class="fileTreeContainer">
+                <ul id="fileTree"></ul>
+            </div>
+            <div id="notebook"></div>
+        </div>
     </div>
 </body>
 </html>

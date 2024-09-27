@@ -163,6 +163,56 @@ join.addEventListener("click", async e => {
 });
 
 function socketJoin(key) {
+
+    socket.on(`cellChange${key}`, change => {
+        const unappliedChanges = allUnappliedChanges[key + change.filename]
+        const [unappliedChange] = unappliedChanges.unappliedFileChanges;
+        const domAlreadyUpdated = JSON.stringify(change) === JSON.stringify(unappliedChange);
+        const fileActive = currentFileName === change.filename;
+        if (domAlreadyUpdated) {
+            unappliedChanges.unappliedFileChanges.shift();
+        }
+
+        const fileData = files[change.key][change.filename];
+        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+
+        if (change.type === "delete") {
+            fileData.data.cells.splice(cellIndex, 1);
+            if (fileActive) {
+                document.querySelectorAll(".cell")[cellIndex].remove();
+            }
+        } else if (change.type === "add") {
+            if (fileActive) {
+                const cellContainer = createCellElement(fileData, change.data);
+                document.querySelectorAll(".cell")[cellIndex].after(cellContainer);
+                updateTextAreaHeight(cellContainer.querySelector("textarea"));
+            }
+            fileData.data.cells.splice(cellIndex + 1, 0, change.data);
+            initLocalFileInfos(key, [fileData]);
+        } else if (change.type === "moveUp") {
+            if (fileActive) {
+                const nextCell = document.querySelectorAll(".cell")[cellIndex - 1];
+                const current = document.querySelectorAll(".cell")[cellIndex];
+                current.after(nextCell);
+            }
+            [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
+        } else if (change.type === "moveDown") {
+            if (fileActive) {
+                const prevCell = document.querySelectorAll(".cell")[cellIndex + 1];
+                const current = document.querySelectorAll(".cell")[cellIndex];
+                current.before(prevCell);
+            }
+
+            [fileData.data.cells[cellIndex + 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex + 1]]
+        } else if(change.type === "changeType") {
+            fileData.data.cells[cellIndex].cell_type = change.newType;
+            if (fileActive) {
+                const cellElem = document.querySelectorAll(".cell")[cellIndex];
+                cellElem.querySelector("select").value = change.newType;
+            }
+        }
+    });
+
     socket.on(`fileUpdates${key}`, change => {
         
         const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
@@ -174,7 +224,7 @@ function socketJoin(key) {
             }
         } 
 
-        console.log("Changes", change, unappliedChanges)
+        // console.log("Changes", change, unappliedChanges)
         changeTextarea([change, ...unappliedChanges]);
         if (needToUpdateCaret) updateCaret(change);
         for(let i = 0; i < unappliedChanges.length; i++) {
@@ -190,12 +240,9 @@ function socketJoin(key) {
     });
 
     function updateCaret(change) {
-        console.log("Caret")
-        if (change.end <= currentCaretStart) currentCaretStart += change.data.length - (change.end - change.start);
-        if (change.end <= currentCaretEnd) currentCaretEnd += change.data.length - (change.end - change.start);
-        
-        document.querySelectorAll("textarea")[currentCelNumber].selectionStart = currentCaretStart;
-        document.querySelectorAll("textarea")[currentCelNumber].selectionEnd = currentCaretEnd;
+        const textarea = document.querySelectorAll("textarea")[currentCelNumber];
+        if (change.end <= textarea.selectionStart) textarea.selectionStart += change.data.length - (change.end - change.start);
+        if (change.end <= textarea.selectionEnd) textarea.selectionEnd += change.data.length - (change.end - change.start);
     }
 }
 
@@ -203,10 +250,11 @@ function socketJoin(key) {
 
 function initLocalFileInfos(key, files) {
     for(const file of Object.values(files)) {
-        allUnappliedChanges[key + file.name] = {};
+        allUnappliedChanges[key + file.name] ??= {};
         const cells = allUnappliedChanges[key + file.name];
+        cells.unappliedFileChanges ??= [];
         for(const cell of file.data.cells) {
-            cells[cell.merge_id] = {unappliedChanges: []};
+            cells[cell.merge_id] ??= {unappliedChanges: []};
         }
     }
 }
@@ -281,20 +329,116 @@ function displayFileData(fileData) {
     currentFileName = fileData.name;
     currentKey = fileData.key;
     for (const cell of fileData.data.cells) {
-        const textarea = createTextArea(cell.merge_id);
-        textarea.value = cell.source;
-        let textBeforeInput = "";
-
-        textarea.addEventListener("beforeinput", _ => {
-            textBeforeInput = textarea.value;
-        })
-        textarea.addEventListener("input", _ => {
-            changeInsideCell(fileData.key, fileData.name, cell.merge_id, textBeforeInput, textarea.value)
-            updateTextAreaHeight(textarea);
-        })
-        notebook.append(textarea);
-        updateTextAreaHeight(textarea);
+        const cellContainer = createCellElement(fileData, cell);
+        notebook.append(cellContainer);
+        updateTextAreaHeight(cellContainer.querySelector("textarea"));
     }
+}
+
+function createCellElement(fileData, cellData) {
+    const cellContainer = document.createElement("div");
+    cellContainer.classList.add("cell");
+
+    const typeSelection = document.createElement("select");
+    typeSelection.addEventListener("change", () => {
+        socket.emit("cellChange", {
+            type: "changeType",
+            cel: cellData.merge_id,
+            filename: fileData.name,
+            key: fileData.key,
+            newType: typeSelection.value
+        });
+    })
+    const markdownOption = document.createElement("option");
+    markdownOption.value = "markdown";
+    markdownOption.textContent = "Markdown";
+    const codeOption = document.createElement("option");
+    codeOption.value = "code";
+    codeOption.textContent = "Code";
+    typeSelection.append(markdownOption, codeOption);
+    typeSelection.value = cellData.cell_type;
+
+    const buttonContainer = document.createElement("div");
+    buttonContainer.classList.add("buttonContainer");
+    const upButton = document.createElement("button");
+    upButton.textContent = "Up";
+    upButton.addEventListener("click", () => {
+        socket.emit("cellChange", {type: "moveUp", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+    });
+    const downButton = document.createElement("button");
+    downButton.textContent = "Down";
+    downButton.addEventListener("click", () => {
+        socket.emit("cellChange", {type: "moveDown", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+    });
+
+    const addButton = document.createElement("button");
+    addButton.textContent = "Add";
+    addButton.addEventListener("click", () => {
+        socket.emit("cellChange", {type: "add", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+    });
+    const deleteButton = document.createElement("button");
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => {
+        socket.emit("cellChange", {type: "delete", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+    });
+    buttonContainer.append(upButton, downButton, addButton, deleteButton);
+    
+    const textarea = createTextArea(cellData.merge_id);
+    textarea.value = cellData.source;
+
+    let textBeforeInput = "";
+    textarea.addEventListener("beforeinput", _ => {
+        textBeforeInput = textarea.value;
+    })
+    textarea.addEventListener("input", _ => {
+        changeInsideCell(fileData.key, fileData.name, cellData.merge_id, textBeforeInput, textarea.value)
+        updateTextAreaHeight(textarea);
+    })
+
+    cellContainer.append(typeSelection, textarea, buttonContainer);
+
+
+    if (cellData.outputs?.length) {
+        const outputContainer = document.createElement("details");
+        outputContainer.classList.add("outputContainer")
+        outputContainer.setAttribute("open", "")
+        const summary = document.createElement("summary");
+        summary.textContent = "Hide output";
+        outputContainer.append(summary);
+        for (const { text, data, ...output } of cellData.outputs) {
+            if (data) {
+                if ("image/png" in data) {
+                    const img = document.createElement("img");
+                    img.src = `data:image/png;base64,${data["image/png"]}`;
+                    outputContainer.append(img);
+                }
+                else if ("text/html" in data) {
+                    const outputContent = document.createElement("div");
+                    if (Array.isArray(data["text/html"])) outputContent.innerHTML = data["text/html"].join("");
+                    else outputContent.innerHTML = data["text/html"];
+                    outputContainer.append(outputContent);
+                }
+                else if ("text/plain" in data) {
+                    const pre = document.createElement("pre");
+                    if (Array.isArray(data["text/plain"])) pre.textContent = data["text/plain"].join("");
+                    else pre.textContent = data["text/plain"];
+                    outputContainer.append(pre)
+                }
+            } else if (text) {
+                const pre = document.createElement("pre");
+                if (Array.isArray(text)) pre.textContent = text.join("");
+                else pre.textContent = text;
+                outputContainer.append(pre)
+            }
+        }
+        cellContainer.append(outputContainer)
+    }
+
+
+
+    // notebook.append(cellContainer);
+    // updateTextAreaHeight(textarea);
+    return cellContainer;
 }
 
 function updateTextAreaHeight(textarea) {
@@ -341,7 +485,6 @@ function createTextArea(cellId) {
     function checkcaret() {
         currentCaretStart = textarea.selectionStart;
         currentCaretEnd = textarea.selectionEnd;
-        // console.log(textarea.selectionStart, textarea.selectionEnd);
     }
 
     return textarea
@@ -405,6 +548,17 @@ function parseFileChanges(fileData) {
     
 }
 
+// setInterval(() => {
+//     if(document.activeElement?.tagName === "TEXTAREA") {
+//         const text = document.activeElement.value;
+//         // console.log(files[123]["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"])
+//         if (!files[123]?.["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"].handler) {
+//             return;
+//         }
+//         changeInsideCell(123, "/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb", 0, text, text + "a")
+//     }
+// }, 100)
+
 function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     if (beforeEditText === editedText) return;
 
@@ -426,22 +580,22 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     }
 
     if (firstUnchangedChar === -1 && lastUnchangedChar === -1) {
-        console.log("If change: 1 done")
+        // console.log("If change: 1 done")
         change.start = 0;
         change.end = beforeEditText.length;
         change.data = editedText;
     } else if (firstUnchangedChar === -1) {
-        console.log("If change: 2 and 3 done")
+        // console.log("If change: 2 and 3 done")
         change.start = 0;
         change.end = beforeEditText.length - 1 - lastUnchangedChar;
         change.data = editedText.substring(0, editedText.length - 1 - lastUnchangedChar);
     } else if (lastUnchangedChar === -1) {
-        console.log("If change: 4 and 5 done")
+        // console.log("If change: 4 and 5 done")
         change.start = firstUnchangedChar + 1;
         change.end = beforeEditText.length;
         change.data = editedText.substring(firstUnchangedChar + 1);
     } else {
-        console.log("If change: 6 and 7 done");
+        // console.log("If change: 6 and 7 done");
         change.start = firstUnchangedChar + 1;
         change.end = beforeEditText.length - lastUnchangedChar - 1;
         change.data = editedText.substring(firstUnchangedChar + 1, editedText.length - lastUnchangedChar - 1);
@@ -449,13 +603,13 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     // console.log(firstUnchangedChar, lastUnchangedChar);
     // console.log({start: firstUnchangedChar, end: lastUnchangedChar})
 
-    console.log(JSON.stringify(change, (key, val) => {
-        if (key === "filename") return undefined;
-        if (key === "cel") return undefined;
-        if (key === "id") return undefined;
-        if (key === "key") return undefined;
-        return val;
-    }));
+    // console.log(JSON.stringify(change, (key, val) => {
+    //     if (key === "filename") return undefined;
+    //     if (key === "cel") return undefined;
+    //     if (key === "id") return undefined;
+    //     if (key === "key") return undefined;
+    //     return val;
+    // }));
 
     const advancedClone = structuredClone(unappliedChanges);
     for(let i = 1; i < advancedClone.length; i++) {
@@ -476,10 +630,8 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
 
     unappliedChanges.push(revertedChange);
     
-    changeTextarea(unappliedChanges);
     socket.emit("changeFile", revertedChange);
 }
-
 function advanceChangeForward(oldChange, change) {
     const clone = structuredClone(change);
     const oldDelta = oldChange.end - oldChange.start;
@@ -488,9 +640,9 @@ function advanceChangeForward(oldChange, change) {
     const curMovement = clone.data.length - curDelta;
     const oldMaxX = Math.max(oldChange.end, oldChange.start + oldChange.data.length);
     const curMaxX = Math.max(clone.end, clone.start + clone.data.length);
-    
+
     // console.log(oldChange, change);
-    
+
     if (oldMovement === 0) {
         // console.log("Advanced 0: ")
         return clone;
@@ -510,7 +662,7 @@ function advanceChangeForward(oldChange, change) {
         console.error("Advanced 5: ")
     } else if (true) {
         console.error("Advanced 6: ")
-    }  else if (true) {
+    } else if (true) {
         console.error("Advanced 7: ")
     } else if (true) {
         console.error("Advanced 8: ")
@@ -555,7 +707,10 @@ function revertChangeBackward(oldChange, change) {
         if (oldChange.end === clone.end) clone.replaceEnd = true;
     } else if (true) {
         console.error("Revert 4: ")
-    } else if (true) {
+    } else if (true) { {
+
+        if (oldChange.end === clone.end) clone.replaceEnd = true;
+    }
         console.error("Revert 5: ")
     } else if (true) {
         console.error("Revert 6: ")
@@ -573,7 +728,7 @@ function revertChangeBackward(oldChange, change) {
 }
 
 function changeTextarea(rootChanges) {
-    console.log("Change pre element", rootChanges);
+    // console.log("Change pre element", rootChanges);
 
     const advancedClone = structuredClone(rootChanges);
     for(let i = 1; i < advancedClone.length; i++) {
@@ -595,9 +750,14 @@ function changeTextarea(rootChanges) {
     }
 
     if(cellNum === -1) return;
-    console.log("????")
     const textarea = notebook.querySelectorAll("textarea")[cellNum];
+    const selectionStart = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    const selectionDirection = textarea.selectionDirection;
     textarea.value = newText;
+    textarea.selectionStart = selectionStart;
+    textarea.selectionEnd = selectionEnd;
+    textarea.selectionDirection = selectionDirection;
     updateTextAreaHeight(textarea);
 }
 

@@ -2,37 +2,102 @@
     box-sizing: border-box;
 }
 
+body {
+    position: absolute;
+    inset: 0px;
+    margin: 0px;
+}
+
+#root {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: red;
+    padding: 10px;
+}
+
+.header {
+    position: sticky;
+    top: 0px;
+    z-index: 1;
+    background: skyblue;
+}
+
 .content {
-    display: grid;
-    grid-template-columns: 300px 1fr;
+    position: relative;
+    display: flex;
+    background: orange;
+    padding: 10px;
     gap: 10px;
 }
 
-#fileTree {
+.fileTreeContainer {
     position: relative;
-    border: 2px solid red;
-    word-break: break-all;
+    background: blue;
+    min-width: 300px;
 
-    .file {
-        cursor: pointer;
-        background-color: blue;
-        color: white;
-
-        &.real {
-            background-color: green;
+    #fileTree {
+        position: sticky;
+        top: 25px;
+        word-break: break-all;
+        margin: 0px;
+        padding-right: 10px;
+        padding-left: 25px;
+    
+        .file {
+            cursor: pointer;
+            background-color: blue;
+            color: white;
+    
+            &.real {
+                background-color: green;
+            }
         }
     }
 }
 
+
 #notebook {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    background: purple;
+    width: 100%;
+    padding: 10px;
+    overflow: hidden;
 
-    textarea {
-        border: 2px solid green;
+    .cell {
+        width: 100%;
+        background: pink;
+        display: flex;
+        flex-direction: column;
         padding: 10px;
-        white-space: break-spaces;
-        resize: none;
+        gap: 10px;
+
+        textarea {
+            border: 2px solid green;
+            padding: 10px;
+            white-space: break-spaces;
+            resize: none;
+        }
+
+        img {
+            max-width: 100%;
+            min-width: 300px;
+        }
+
+        .outputContainer {
+            
+            summary {
+                cursor: pointer;
+            }
+
+            > * {
+                overflow: auto;
+                max-width: 100%;
+            }
+        } 
     }
+
 }
