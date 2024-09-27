@@ -174,7 +174,7 @@ function socketJoin(key) {
             }
         } 
 
-        console.log("Changes", change, unappliedChanges)
+        // console.log("Changes", change, unappliedChanges)
         changeTextarea([change, ...unappliedChanges]);
         if (needToUpdateCaret) updateCaret(change);
         for(let i = 0; i < unappliedChanges.length; i++) {
@@ -190,12 +190,9 @@ function socketJoin(key) {
     });
 
     function updateCaret(change) {
-        console.log("Caret")
-        if (change.end <= currentCaretStart) currentCaretStart += change.data.length - (change.end - change.start);
-        if (change.end <= currentCaretEnd) currentCaretEnd += change.data.length - (change.end - change.start);
-        
-        document.querySelectorAll("textarea")[currentCelNumber].selectionStart = currentCaretStart;
-        document.querySelectorAll("textarea")[currentCelNumber].selectionEnd = currentCaretEnd;
+        const textarea = document.querySelectorAll("textarea")[currentCelNumber];
+        if (change.end <= textarea.selectionStart) textarea.selectionStart += change.data.length - (change.end - change.start);
+        if (change.end <= textarea.selectionEnd) textarea.selectionEnd += change.data.length - (change.end - change.start);
     }
 }
 
@@ -406,7 +403,6 @@ function createTextArea(cellId) {
     function checkcaret() {
         currentCaretStart = textarea.selectionStart;
         currentCaretEnd = textarea.selectionEnd;
-        // console.log(textarea.selectionStart, textarea.selectionEnd);
     }
 
     return textarea
@@ -470,6 +466,17 @@ function parseFileChanges(fileData) {
     
 }
 
+// setInterval(() => {
+//     if(document.activeElement?.tagName === "TEXTAREA") {
+//         const text = document.activeElement.value;
+//         // console.log(files[123]["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"])
+//         if (!files[123]?.["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"].handler) {
+//             return;
+//         }
+//         changeInsideCell(123, "/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb", 0, text, text + "a")
+//     }
+// }, 100)
+
 function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     if (beforeEditText === editedText) return;
 
@@ -491,22 +498,22 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     }
 
     if (firstUnchangedChar === -1 && lastUnchangedChar === -1) {
-        console.log("If change: 1 done")
+        // console.log("If change: 1 done")
         change.start = 0;
         change.end = beforeEditText.length;
         change.data = editedText;
     } else if (firstUnchangedChar === -1) {
-        console.log("If change: 2 and 3 done")
+        // console.log("If change: 2 and 3 done")
         change.start = 0;
         change.end = beforeEditText.length - 1 - lastUnchangedChar;
         change.data = editedText.substring(0, editedText.length - 1 - lastUnchangedChar);
     } else if (lastUnchangedChar === -1) {
-        console.log("If change: 4 and 5 done")
+        // console.log("If change: 4 and 5 done")
         change.start = firstUnchangedChar + 1;
         change.end = beforeEditText.length;
         change.data = editedText.substring(firstUnchangedChar + 1);
     } else {
-        console.log("If change: 6 and 7 done");
+        // console.log("If change: 6 and 7 done");
         change.start = firstUnchangedChar + 1;
         change.end = beforeEditText.length - lastUnchangedChar - 1;
         change.data = editedText.substring(firstUnchangedChar + 1, editedText.length - lastUnchangedChar - 1);
@@ -514,13 +521,13 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     // console.log(firstUnchangedChar, lastUnchangedChar);
     // console.log({start: firstUnchangedChar, end: lastUnchangedChar})
 
-    console.log(JSON.stringify(change, (key, val) => {
-        if (key === "filename") return undefined;
-        if (key === "cel") return undefined;
-        if (key === "id") return undefined;
-        if (key === "key") return undefined;
-        return val;
-    }));
+    // console.log(JSON.stringify(change, (key, val) => {
+    //     if (key === "filename") return undefined;
+    //     if (key === "cel") return undefined;
+    //     if (key === "id") return undefined;
+    //     if (key === "key") return undefined;
+    //     return val;
+    // }));
 
     const advancedClone = structuredClone(unappliedChanges);
     for(let i = 1; i < advancedClone.length; i++) {
@@ -638,7 +645,7 @@ function revertChangeBackward(oldChange, change) {
 }
 
 function changeTextarea(rootChanges) {
-    console.log("Change pre element", rootChanges);
+    // console.log("Change pre element", rootChanges);
 
     const advancedClone = structuredClone(rootChanges);
     for(let i = 1; i < advancedClone.length; i++) {
@@ -660,9 +667,14 @@ function changeTextarea(rootChanges) {
     }
 
     if(cellNum === -1) return;
-    console.log("????")
     const textarea = notebook.querySelectorAll("textarea")[cellNum];
+    const selectionStart = textarea.selectionStart;
+    const selectionEnd = textarea.selectionEnd;
+    const selectionDirection = textarea.selectionDirection;
     textarea.value = newText;
+    textarea.selectionStart = selectionStart;
+    textarea.selectionEnd = selectionEnd;
+    textarea.selectionDirection = selectionDirection;
     updateTextAreaHeight(textarea);
 }
 
