@@ -1,5 +1,5 @@
 
-const baseURL = "http://localhost:4000/api/"
+const baseURL = "https://jupiter-notebook-sharing.onrender.com/api/"
 export const api = {
     hostLobby: async({key}) => {
         const response = await fetch(baseURL + `lobby/host/${key}`, {

@@ -5,5 +5,6 @@ export default defineConfig({
   plugins: [solid()],
   server: {
     port: 5500,
-  }
+  },
+  base: "./",
 })
