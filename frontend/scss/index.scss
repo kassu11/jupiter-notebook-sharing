@@ -90,8 +90,9 @@ body {
 
         .textContainer {
             position: relative;
+            background: #f4f2f0;
 
-            pre, textarea {
+            pre, textarea, code {
                 position: relative;
                 all: unset;
                 font-size: 14px;
@@ -106,7 +107,23 @@ body {
             }
 
             textarea {
-                background: white;
+                position: relative;
+                z-index: 2;
+                &.code {
+                    color: transparent;
+                    caret-color: black;
+                }
+                &::selection {
+                    color: white;
+                    background-color: rgb(0, 100, 161);
+                }
+            }
+
+            .highlight {
+                position: absolute;
+                user-select: none;
+                pointer-events: none;
+                padding: 0px;
             }
     
             .userCarets {

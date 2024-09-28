@@ -1,5 +1,9 @@
 import socketIO from "socket.io-client";
 import {api} from "./api";
+import Prism from "./prism";
+
+console.log(Prism.languages)
+// loadLanguages(["python"])
 const loadButton = document.querySelector("#openProjectFolder");
 const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
@@ -277,6 +281,7 @@ function socketJoin(key) {
             if (fileActive) {
                 const cellElem = document.querySelectorAll(".cell")[cellIndex];
                 cellElem.querySelector("select").value = change.newType;
+                updateCodeHighlight(cellElem);
             }
         }
     });
@@ -492,6 +497,7 @@ function createCellElement(fileData, cellData) {
     const textarea = createTextArea(cellData.merge_id, fileData);
     textarea.value = cellData.source;
     textareaContainer.append(pre, textarea);
+    
 
     let textBeforeInput = "";
     textarea.addEventListener("beforeinput", _ => {
@@ -500,9 +506,11 @@ function createCellElement(fileData, cellData) {
     textarea.addEventListener("input", _ => {
         changeInsideCell(fileData.key, fileData.name, cellData.merge_id, textBeforeInput, textarea.value)
         updateTextAreaHeight(textarea);
+        updateCodeHighlight(cellContainer);
     })
 
     cellContainer.append(typeSelection, textareaContainer, buttonContainer);
+    updateCodeHighlight(cellContainer);
 
 
     if (cellData.outputs?.length) {
@@ -541,11 +549,26 @@ function createCellElement(fileData, cellData) {
         cellContainer.append(outputContainer)
     }
 
-
-
-    // notebook.append(cellContainer);
-    // updateTextAreaHeight(textarea);
     return cellContainer;
+}
+
+function updateCodeHighlight(cellElement) {
+    const selection = cellElement.querySelector("select");
+    const textarea = cellElement.querySelector("textarea");
+    cellElement.querySelector(".highlight")?.remove();
+
+    if (selection.value === "code") {
+        const codeHighlightPre = document.createElement("pre");
+        codeHighlightPre.classList.add("highlight");
+        const codeHighlightCode = document.createElement("code");
+        codeHighlightCode.classList.add("language-python");
+        codeHighlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.python, "python");
+        codeHighlightPre.append(codeHighlightCode);
+        textarea.parentElement.prepend(codeHighlightPre);
+        textarea.classList.add("code");
+    } else {
+        textarea.classList.remove("code");
+    }
 }
 
 function updateTextAreaHeight(textarea) {
@@ -872,6 +895,7 @@ function changeTextarea(rootChanges) {
     textarea.selectionEnd = selectionEnd;
     textarea.selectionDirection = selectionDirection;
     updateTextAreaHeight(textarea);
+    updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
 }
 
 (() => {
