@@ -13,6 +13,7 @@ body {
     position: absolute;
     inset: 0px;
     margin: 0px;
+    font-family: system-ui;
 }
 
 #root {
@@ -81,6 +82,11 @@ body {
         flex-direction: column;
         padding: 10px;
         gap: 10px;
+        font-family: "JetBrainsMono";
+
+        * {
+            font: inherit;
+        }
 
         .textContainer {
             position: relative;
@@ -88,14 +94,19 @@ body {
             pre, textarea {
                 position: relative;
                 all: unset;
-                font-family: "JetBrainsMono";
-                font-size: 16px;
+                font-size: 14px;
                 display: block;
                 font-weight: 450;
                 width: 100%;
                 white-space: pre-wrap;
                 overflow: hidden;
                 word-break: break-all;
+                padding: 10px;
+                box-sizing: border-box;
+            }
+
+            textarea {
+                background: white;
             }
     
             .userCarets {

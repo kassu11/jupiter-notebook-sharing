@@ -99,7 +99,7 @@ const socketConnection = (socket) => {
 
 			changeFilo.push(change);
 	
-			socketIO.emit(socketKey, change);
+			socketIO.emit(socketKey, {...change, userId: socket.id});
 			// socket.broadcast.emit(socketKey, change);
 		} catch (e) {
 			console.error(e)
