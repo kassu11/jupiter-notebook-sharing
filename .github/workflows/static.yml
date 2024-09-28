@@ -1,55 +1,44 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+name: Build and Deploy Static Website
 
 on:
-  # Runs on pushes targeting the default branch
   push:
-    branches: ['main']
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# Sets the GITHUB_TOKEN permissions to allow deployment to GitHub Pages
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-defaults:
-  run:
-    working-directory: frontend
-
-# Allow one concurrent deployment
-concurrency:
-  group: 'pages'
-  cancel-in-progress: true
+    branches:
+      - main  # Runs the action on pushes to the "main" branch
+  pull_request:
+    branches:
+      - main  # Optionally run on pull requests
 
 jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      # Step 1: Checkout the repository
+      - name: Checkout code
         uses: actions/checkout@v3
-      - name: Set up Node
+
+      # Step 2: Set up Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 18
-          cache: 'npm'
+          node-version: '18' # Specify Node.js version
+
+      # Step 3: Install dependencies
       - name: Install dependencies
-        run: npm install
-      - name: Build
-        run: npm run build
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v1
+        run: |
+          cd frontend # Navigate to the frontend folder
+          npm install
+
+      # Step 4: Build the project
+      - name: Build project
+        run: |
+          cd frontend
+          npm run build
+
+      # Step 5: Upload build artifacts (optional)
+      # This step uploads the `build` directory, useful for deploying later
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
         with:
-          # Upload dist repository
-          path: './dist'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
+          name: build
+          path: frontend/build # Path to your build folder
