@@ -1,11 +1,13 @@
 import socketIO from "socket.io-client";
 import {api} from "./api";
-const loadButton = document.querySelector("#openProjectFolder");
+import Prism from "./prism";
+
 const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
 const host = document.querySelector("#host");
 const join = document.querySelector("#join");
 const lag = document.querySelector("#lag");
+const users = document.querySelector("#users");
 
 const files = {};
 const allFileHandlers = [];
@@ -160,11 +162,30 @@ join.addEventListener("click", async e => {
 });
 
 function socketJoin(key) {
-
     socket.on(`caretUpdate${key}`, caretUpdate);
     function caretUpdate(caret) {
         const oldCaret = allRoomUsers[caret.userId];
         allRoomUsers[caret.userId] = caret;
+        
+        users.textContent = "";
+        for(const user of Object.values(allRoomUsers)) {
+            const div = document.createElement("div");
+            div.classList.toggle("inactive", user.cel === -1);
+            div.textContent = user.userId.substring(0, 3);
+            div.addEventListener("click", () => {
+                const fileData = files[user.key][user.filename];
+                if (!fileData) return;
+                if (currentFileName !== user.filename) displayFileData(fileData);
+                if (user.cel !== -1) {
+                    const index = fileData.data.cells.findIndex(cell => cell.merge_id === user.cel);
+                    document.querySelectorAll(".cell")[index]?.scrollIntoView();
+                }
+            })
+            users.append(div);
+        }
+
+
+
         const oldIndex = oldCaret == null ? -1 : files[key][caret.filename].data.cells.findIndex(row => row.merge_id === oldCaret.cel);
         const curIndex = files[key][caret.filename].data.cells.findIndex(row => row.merge_id === caret.cel);
         if (currentFileName !== caret.filename) return;
@@ -174,55 +195,10 @@ function socketJoin(key) {
             updateUserCaretElement(oldCaret, text, oldIndex);
         }
 
+        if (curIndex === -1) return;
+
         const text = files[key][caret.filename].data.cells[curIndex].source;
         updateUserCaretElement(caret, text, curIndex);
-    }
-
-    function updateUserCaretElement(caret, text, cellIndex) {
-        const caretPre = document.querySelectorAll(".cell .userCarets")[cellIndex];
-        caretPre.textContent = "";
-        const allCellUsers = Object.values(allRoomUsers).filter(user => user.cel === caret.cel)
-            .map(user => ({
-                ...user, 
-                min: Math.min(user.selectionStart, user.selectionEnd), 
-                max: Math.max(user.selectionStart, user.selectionEnd),
-            }));
-        if(allCellUsers.length === 0) return;
-        const bitArray = Array(text.length).fill(0);
-        allCellUsers.forEach((user, i) => {
-            const mask = 1<<parseInt(i);
-            if (user.min == user.max) bitArray[user.min] |= mask;
-            for(let j = user.min; j < user.max; j++) {
-                bitArray[j] |= mask;
-            }
-        });
-
-        let start = 0;
-        for(let i = 0; i <= bitArray.length; i++) {
-            if (bitArray[i] === bitArray[i + 1] && i !== bitArray.length) continue;
-
-            let curSpan = caretPre;
-            allCellUsers.forEach((caret, j) => {
-                const mask = 1<<parseInt(j);
-                if ((bitArray[i] & mask) !== mask) return;
-                const span = document.createElement("span");
-                // span.style.background = "#ff00004f";
-                curSpan.append(span);
-                curSpan = span;
-                // console.log(i, start, caret)
-                if (caret.min === caret.max) {
-                    span.classList.add("backward", "noFill");
-                } else if(i + 1 === caret.max && caret.selectionDirection == "forward") {
-                    span.classList.add("forward");
-                } else if(start === caret.min && caret.selectionDirection == "backward") {
-                    span.classList.add("backward");
-                }
-            });
-
-            curSpan.append(document.createTextNode(text.substring(start, i + 1)));
-            start = i + 1;
-        }
-
     }
 
     socket.on(`cellChange${key}`, change => {
@@ -277,6 +253,7 @@ function socketJoin(key) {
             if (fileActive) {
                 const cellElem = document.querySelectorAll(".cell")[cellIndex];
                 cellElem.querySelector("select").value = change.newType;
+                updateCodeHighlight(cellElem);
             }
         }
     });
@@ -346,6 +323,51 @@ function socketJoin(key) {
     }
 }
 
+function updateUserCaretElement(caret, text, cellIndex) {
+    const caretPre = document.querySelectorAll(".cell .userCarets")[cellIndex];
+    caretPre.textContent = "";
+    const allCellUsers = Object.values(allRoomUsers).filter(user => user.cel === caret.cel)
+        .map(user => ({
+            ...user, 
+            min: Math.min(user.selectionStart, user.selectionEnd), 
+            max: Math.max(user.selectionStart, user.selectionEnd),
+        }));
+    if(allCellUsers.length === 0) return;
+    const bitArray = Array(text.length).fill(0);
+    allCellUsers.forEach((user, i) => {
+        const mask = 1<<parseInt(i);
+        if (user.min == user.max) bitArray[user.min] |= mask;
+        for(let j = user.min; j < user.max; j++) {
+            bitArray[j] |= mask;
+        }
+    });
+
+    let start = 0;
+    for(let i = 0; i <= bitArray.length; i++) {
+        if (bitArray[i] === bitArray[i + 1] && i !== bitArray.length) continue;
+
+        let curSpan = caretPre;
+        allCellUsers.forEach((caret, j) => {
+            const mask = 1<<parseInt(j);
+            if ((bitArray[i] & mask) !== mask) return;
+            const span = document.createElement("span");
+            // span.style.background = "#ff00004f";
+            curSpan.append(span);
+            curSpan = span;
+            // console.log(i, start, caret)
+            if (caret.min === caret.max) {
+                span.classList.add("backward", "noFill");
+            } else if(i + 1 === caret.max && caret.selectionDirection == "forward") {
+                span.classList.add("forward");
+            } else if(start === caret.min && caret.selectionDirection == "backward") {
+                span.classList.add("backward");
+            }
+        });
+
+        curSpan.append(document.createTextNode(text.substring(start, i + 1)));
+        start = i + 1;
+    }
+}
 
 
 function initLocalFileInfos(key, files) {
@@ -358,8 +380,6 @@ function initLocalFileInfos(key, files) {
         }
     }
 }
-
-loadButton.addEventListener("click", loadProjectFolder);
 
 async function loadProjectFolder() {
     fileTree.textContent = "";
@@ -428,13 +448,20 @@ function displayFileData(fileData) {
     notebook.textContent = "";
     currentFileName = fileData.name;
     currentKey = fileData.key;
-    for (const cell of fileData.data.cells) {
+
+    const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
+    for (let i = 0; i < fileData.data.cells.length; i++) {
+        const cell = fileData.data.cells[i];
         const cellContainer = createCellElement(fileData, cell);
         notebook.append(cellContainer);
         const textArea = cellContainer.querySelector("textarea")
         setTimeout(() => updateTextAreaHeight(textArea), 100);
         updateTextAreaHeight(textArea);
+        if(users.find(u => u.cel === cell.merge_id)) {
+            updateUserCaretElement({cel: cell.merge_id}, cell.source, i);
+        }
     }
+    
 }
 
 function createCellElement(fileData, cellData) {
@@ -492,6 +519,7 @@ function createCellElement(fileData, cellData) {
     const textarea = createTextArea(cellData.merge_id, fileData);
     textarea.value = cellData.source;
     textareaContainer.append(pre, textarea);
+    
 
     let textBeforeInput = "";
     textarea.addEventListener("beforeinput", _ => {
@@ -500,9 +528,11 @@ function createCellElement(fileData, cellData) {
     textarea.addEventListener("input", _ => {
         changeInsideCell(fileData.key, fileData.name, cellData.merge_id, textBeforeInput, textarea.value)
         updateTextAreaHeight(textarea);
+        updateCodeHighlight(cellContainer);
     })
 
     cellContainer.append(typeSelection, textareaContainer, buttonContainer);
+    updateCodeHighlight(cellContainer);
 
 
     if (cellData.outputs?.length) {
@@ -541,11 +571,26 @@ function createCellElement(fileData, cellData) {
         cellContainer.append(outputContainer)
     }
 
-
-
-    // notebook.append(cellContainer);
-    // updateTextAreaHeight(textarea);
     return cellContainer;
+}
+
+function updateCodeHighlight(cellElement) {
+    const selection = cellElement.querySelector("select");
+    const textarea = cellElement.querySelector("textarea");
+    cellElement.querySelector(".highlight")?.remove();
+
+    if (selection.value === "code") {
+        const codeHighlightPre = document.createElement("pre");
+        codeHighlightPre.classList.add("highlight");
+        const codeHighlightCode = document.createElement("code");
+        codeHighlightCode.classList.add("language-python");
+        codeHighlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.python, "python");
+        codeHighlightPre.append(codeHighlightCode);
+        textarea.parentElement.prepend(codeHighlightPre);
+        textarea.classList.add("code");
+    } else {
+        textarea.classList.remove("code");
+    }
 }
 
 function updateTextAreaHeight(textarea) {
@@ -573,6 +618,9 @@ function createTextArea(cellId, fileData) {
 
     function blur() {
         clearInterval(interval);
+        if (document.activeElement.tagName !== "TEXTAREA") {
+            socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
+        }
         textarea.addEventListener("focus", focus, {once: true});
     }
 
@@ -637,11 +685,10 @@ async function writeJsonDataToUserFile(fileData) {
 
 
 
-    // Broken koska objecti muutos
     const clone = structuredClone(fileData.data);
     for(const cell of clone.cells) {
         cell.source = cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n");
-        if (cell.source.length <= 1) cell.source = cell.join("");
+        if (cell.source.length <= 1) cell.source = cell.source.join("");
         delete cell.id;
     }
     const stream = await fileData.handler.createWritable();
@@ -872,6 +919,7 @@ function changeTextarea(rootChanges) {
     textarea.selectionEnd = selectionEnd;
     textarea.selectionDirection = selectionDirection;
     updateTextAreaHeight(textarea);
+    updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
 }
 
 (() => {
