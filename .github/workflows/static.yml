@@ -34,12 +34,10 @@ jobs:
           cd frontend
           npm run build
 
-      - name: List all files and directories after build
-        run: ls -R
       # Step 5: Upload build artifacts (optional)
       # This step uploads the `build` directory, useful for deploying later
       - name: Upload build artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build
-          path: frontend/build # Path to your build folder
+          path: frontend/dist # Path to your build folder
