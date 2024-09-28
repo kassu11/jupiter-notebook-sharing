@@ -293,9 +293,9 @@ function socketJoin(key) {
         }
 
         const currentTextarea = document.querySelectorAll("textarea")[currentCelNumber];
-        const start = currentTextarea.selectionStart;
-        const end = currentTextarea.selectionEnd;
-        const dir = currentTextarea.selectionDirection;
+        const start = currentTextarea?.selectionStart;
+        const end = currentTextarea?.selectionEnd;
+        const dir = currentTextarea?.selectionDirection;
         changeTextarea([change, ...unappliedChanges]);
         if (needToUpdateCaret) updateCaret(change, start, end, dir);
         if (currentFileName === change.filename) updateUserCarets(change);
