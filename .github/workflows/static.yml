@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main  # Runs the action on pushes to the "main" branch
-  pull_request:
-    branches:
-      - main  # Optionally run on pull requests
+
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 
 jobs:
   build:
