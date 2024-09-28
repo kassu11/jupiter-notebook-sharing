@@ -53,7 +53,6 @@ setInterval(async () => {
             main: while(i < localCells.length) {
                 if (localCells[i]?.merge_id == null) continue;
                 for(let j = 0; j < fileCells.length; j++) {
-                    // console.log(localCells[i]?.merge_id, fileCells[j]?.merge_id)
                     if (localCells[i]?.merge_id === fileCells[j]?.merge_id) {
                         localCells[i].metadata = fileCells[j].metadata;
                         localCells[i].cell_type = fileCells[j].cell_type;
@@ -79,7 +78,6 @@ setInterval(async () => {
                 console.log("merge id not found: ", localCells[0]);
                 i++;
             }
-
 
             console.log(fileData.name, file.lastModified);
         }
@@ -114,7 +112,6 @@ host.addEventListener("click", async () => {
 
 join.addEventListener("click", async e => {
     const roomKey = prompt("Enter room key");
-    // loadProjectFolder();
 
     const fetchedFiles = await api.getLoadedFiles({key: roomKey});
     files[roomKey] = fetchedFiles.files;
@@ -296,11 +293,14 @@ function socketJoin(key) {
                 unappliedChanges.shift();
                 needToUpdateCaret = false;
             }
-        } 
+        }
 
-        // console.log("Changes", change, unappliedChanges)
+        const currentTextarea = document.querySelectorAll("textarea")[currentCelNumber];
+        const start = currentTextarea.selectionStart;
+        const end = currentTextarea.selectionEnd;
+        const dir = currentTextarea.selectionDirection;
         changeTextarea([change, ...unappliedChanges]);
-        if (needToUpdateCaret) updateCaret(change);
+        if (needToUpdateCaret) updateCaret(change, start, end, dir);
         if (currentFileName === change.filename) updateUserCarets(change);
         
         for(let i = 0; i < unappliedChanges.length; i++) {
@@ -336,13 +336,12 @@ function socketJoin(key) {
         }
     }
 
-    function updateCaret(change) {
+    function updateCaret(change, start, end, dir) {
         const textarea = document.querySelectorAll("textarea")[currentCelNumber];
         const delta = change.data.length - (change.end - change.start);
-        const start = textarea.selectionStart + delta;
-        const end = textarea.selectionEnd + delta;
-        if (change.end <= textarea.selectionStart) textarea.selectionStart = start;
-        if (change.end <= textarea.selectionEnd) textarea.selectionEnd = end;
+        if (change.end <= start) textarea.selectionStart = start + delta;
+        if (change.end <= end) textarea.selectionEnd = end + delta;
+        textarea.selectionDirection = dir;
 
         selectionStart = textarea.selectionStart;
         selectionEnd = textarea.selectionEnd;
