@@ -2,6 +2,13 @@
     box-sizing: border-box;
 }
 
+@font-face {
+	font-family: "JetBrainsMono";
+	src: url("../fonts/JetBrainsMono-VariableFont_wght.woff2") format("woff2-variations");
+	font-weight: 0 1000;
+	font-display: swap;
+}
+
 body {
     position: absolute;
     inset: 0px;
@@ -33,7 +40,7 @@ body {
 
 .fileTreeContainer {
     position: relative;
-    background: blue;
+    background: teal;
     min-width: 300px;
 
     #fileTree {
@@ -75,11 +82,59 @@ body {
         padding: 10px;
         gap: 10px;
 
-        textarea {
-            border: 2px solid green;
-            padding: 10px;
-            white-space: break-spaces;
-            resize: none;
+        .textContainer {
+            position: relative;
+
+            pre, textarea {
+                position: relative;
+                all: unset;
+                font-family: "JetBrainsMono";
+                font-size: 16px;
+                display: block;
+                font-weight: 450;
+                width: 100%;
+                white-space: pre-wrap;
+                overflow: hidden;
+                word-break: break-all;
+            }
+    
+            .userCarets {
+                position: absolute;
+                user-select: none;
+                pointer-events: none;
+                color: transparent;
+   
+                :not(.noFill) {
+                    background-color: rgba(255, 0, 0, 0.411);
+                    color: white;
+                }
+    
+                .noFill {
+                    background: unset;
+                }
+    
+                .forward, .backward {
+                    position: relative;
+                    &::before, &::after {
+                        position: absolute;
+                        height: 20px;
+                        width: 3px;
+                        background-color: red;
+                    }
+                }
+    
+                .forward::after {
+                    content: "";
+                    bottom: 0px;
+                    translate: -2px 0;
+                }
+    
+                .backward::before {
+                    content: "";
+                    top: 0px;
+                    translate: -2px 0;
+                }
+            }
         }
 
         img {

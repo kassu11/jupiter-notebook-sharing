@@ -34,7 +34,7 @@ const hostedFiles = {}
 const hostingUsers = {}
 
 const hostFiles = async (req, res) => {
-	const { id, key, fileData } = req.body;
+	const { id, key, fileData, socketId } = req.body;
 	// console.log(id, key, fileData, req.body);
 
 	console.log(hostedFiles, hostingUsers)
@@ -56,6 +56,7 @@ const hostFiles = async (req, res) => {
 		res.status(500).json({ message: err.message });
 	}
 };
+
 const getFiles = async (req, res) => {
 	const { key } = req.params;
 

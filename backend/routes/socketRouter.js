@@ -21,11 +21,18 @@ const socketConnection = (socket) => {
 		}
 	});
 
+	socket.on("caretUpdate", caret => {
+		try {
+            if (!(caret.key in hostedFiles)) throw new Error("Invalid key");
+            const socketKey = `caretUpdate${caret.key}`;
+            socket.broadcast.emit(socketKey, {...caret, userId: socket.id});
+		} catch (e) {
+			console.error(e)
+		}
+	});
 
 	socket.on("cellChange", change => {
-		// console.log("Change start")
 		try {
-			// console.log(change);
 			const socketKey = `cellChange${change.key}`
 			const fileData = hostedFiles[change.key][change.filename];
             const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
@@ -61,22 +68,14 @@ const socketConnection = (socket) => {
 			console.error(e)
 		}
 	});
+
 	socket.on("changeFile", change => {
-		// console.log("Change start")
 		try {
-			// console.log(change);
 			const socketKey = `fileUpdates${change.key}`
 			const fileData = hostedFiles[change.key][change.filename];
             const cell = fileData.data.cells.find(v => v.merge_id === change.cel);
 			const changeFilo = fileData.changes;
 	
-			// console.log(hostedFiles[changes.key][changes.filename].changes.iterator());
-			
-			// const wrongIds = change.changes.filter(change => {
-			// 	const id = fileData.data.cells[changes.cel].source[change.row*2 + 1];
-			// 	return change.id !== id;
-			// });
-
 			if(cell.id !== change.id) {
 				console.log("Wrong id");
 				for(const oldChange of changeFilo.iterator()) {
@@ -96,24 +95,17 @@ const socketConnection = (socket) => {
 			const sourceText = cell.source;
 			const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
 			cell.source = newText;
-    		cell.id++;
-
+            cell.id++;
 
 			changeFilo.push(change);
-			// changeFilo.push(changes.changes);
 	
 			socketIO.emit(socketKey, change);
 			// socket.broadcast.emit(socketKey, change);
 		} catch (e) {
 			console.error(e)
 		}
-		// console.log("Change end")
 	});
 
-	// socket.on("host", data => {
-	// 	const valid = ("key" in data && "files" in data && data.key.length > 1);
-	// 	if (!valid) return;
-	// })
 };
 
 

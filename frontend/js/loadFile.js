@@ -12,9 +12,12 @@ const allFileHandlers = [];
 const allUnappliedChanges = {};
 let currentFileName = "";
 let currentKey = "";
-let currentCaretStart = 0;
-let currentCaretEnd = 0;
+let selectionStart = 0;
+let selectionEnd = 0;
+let selectionDirection = "forward";
 let currentCelNumber = -1;
+
+const allRoomUsers = {};
 
 const socket = socketIO("http://localhost:4000/", {
     auth: (token) => {
@@ -164,6 +167,74 @@ join.addEventListener("click", async e => {
 
 function socketJoin(key) {
 
+    socket.on(`caretUpdate${key}`, caret => {
+        console.log(caret)
+        const oldCaret = allRoomUsers[caret.userId];
+        allRoomUsers[caret.userId] = caret;
+        const oldIndex = oldCaret == null ? -1 : files[key][caret.filename].data.cells.findIndex(row => row.merge_id === oldCaret.cel);
+        const curIndex = files[key][caret.filename].data.cells.findIndex(row => row.merge_id === caret.cel);
+        if (currentFileName !== caret.filename) return;
+        
+        if (oldIndex !== -1 && oldIndex !== curIndex) {
+            const text = files[oldCaret.key][oldCaret.filename].data.cells[oldIndex].source;
+            console.log("Old");
+            // Delete old caret
+            updateUserCaretElement(oldCaret, text, oldIndex);
+        } else {
+            const text = files[key][caret.filename].data.cells[curIndex].source;
+            updateUserCaretElement(caret, text, curIndex);
+        }
+        
+        
+    });
+
+    function updateUserCaretElement(caret, text, cellIndex) {
+        const caretPre = document.querySelectorAll(".cell .userCarets")[cellIndex];
+        caretPre.textContent = "";
+        const allCellUsers = Object.values(allRoomUsers).filter(user => user.cel === caret.cel)
+            .map(user => ({
+                ...user, 
+                min: Math.min(user.selectionStart, user.selectionEnd), 
+                max: Math.max(user.selectionStart, user.selectionEnd),
+            }));
+        if(allCellUsers.length === 0) return;
+        const bitArray = Array(text.length).fill(0);
+        allCellUsers.forEach((user, i) => {
+            const mask = 1<<parseInt(i);
+            if (user.min == user.max) bitArray[user.min] |= mask;
+            for(let j = user.min; j < user.max; j++) {
+                bitArray[j] |= mask;
+            }
+        });
+
+        let start = 0;
+        for(let i = 0; i <= bitArray.length; i++) {
+            if (bitArray[i] === bitArray[i + 1] && i !== bitArray.length) continue;
+
+            let curSpan = caretPre;
+            allCellUsers.forEach((caret, j) => {
+                const mask = 1<<parseInt(j);
+                if ((bitArray[i] & mask) !== mask) return;
+                const span = document.createElement("span");
+                // span.style.background = "#ff00004f";
+                curSpan.append(span);
+                curSpan = span;
+                // console.log(i, start, caret)
+                if (caret.min === caret.max) {
+                    span.classList.add("backward", "noFill");
+                } else if(i + 1 === caret.max && caret.selectionDirection == "forward") {
+                    span.classList.add("forward");
+                } else if(start === caret.min && caret.selectionDirection == "backward") {
+                    span.classList.add("backward");
+                }
+            });
+
+            curSpan.append(document.createTextNode(text.substring(start, i + 1)));
+            start = i + 1;
+        }
+
+    }
+
     socket.on(`cellChange${key}`, change => {
         const unappliedChanges = allUnappliedChanges[key + change.filename]
         const [unappliedChange] = unappliedChanges.unappliedFileChanges;
@@ -243,6 +314,9 @@ function socketJoin(key) {
         const textarea = document.querySelectorAll("textarea")[currentCelNumber];
         if (change.end <= textarea.selectionStart) textarea.selectionStart += change.data.length - (change.end - change.start);
         if (change.end <= textarea.selectionEnd) textarea.selectionEnd += change.data.length - (change.end - change.start);
+        selectionStart = textarea.selectionStart;
+        selectionEnd = textarea.selectionEnd;
+        selectionDirection = textarea.selectionDirection;
     }
 }
 
@@ -382,9 +456,14 @@ function createCellElement(fileData, cellData) {
         socket.emit("cellChange", {type: "delete", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
     });
     buttonContainer.append(upButton, downButton, addButton, deleteButton);
-    
-    const textarea = createTextArea(cellData.merge_id);
+     
+    const textareaContainer = document.createElement("div");
+    textareaContainer.classList.add("textContainer");
+    const pre = document.createElement("pre");
+    pre.classList.add("userCarets");
+    const textarea = createTextArea(cellData.merge_id, fileData);
     textarea.value = cellData.source;
+    textareaContainer.append(pre, textarea);
 
     let textBeforeInput = "";
     textarea.addEventListener("beforeinput", _ => {
@@ -395,7 +474,7 @@ function createCellElement(fileData, cellData) {
         updateTextAreaHeight(textarea);
     })
 
-    cellContainer.append(typeSelection, textarea, buttonContainer);
+    cellContainer.append(typeSelection, textareaContainer, buttonContainer);
 
 
     if (cellData.outputs?.length) {
@@ -446,45 +525,51 @@ function updateTextAreaHeight(textarea) {
     textarea.style.height = textarea.scrollHeight + 5 + "px";
 }
 
-function createTextArea(cellId) {
+function createTextArea(cellId, fileData) {
     const textarea = document.createElement("textarea");
 
     textarea.setAttribute("contenteditable", true);
     textarea.setAttribute("spellcheck", false);
 
     textarea.addEventListener("focus", focus, {once: true});
+    let interval = null;
 
     function focus() {
         currentCelNumber = cellId;
+        selectionStart = -1;
+        selectionEnd = -1;
 
-        textarea.addEventListener("keydown", checkcaret);
-        textarea.addEventListener("mousedown", checkcaret);
-        textarea.addEventListener("touchstart", checkcaret);
-        textarea.addEventListener("input", checkcaret);
-        textarea.addEventListener("paste", checkcaret);
-        textarea.addEventListener("cut", checkcaret);
-        textarea.addEventListener("mousemove", checkcaret);
-        textarea.addEventListener("select", checkcaret);
-        textarea.addEventListener("selectstart", checkcaret);
+        interval = setInterval(checkcaret, 100);
         textarea.addEventListener("blur", blur, {once: true});
     }
 
     function blur() {
-        textarea.addEventListener("keydown", checkcaret);
-        textarea.addEventListener("mousedown", checkcaret);
-        textarea.addEventListener("touchstart", checkcaret);
-        textarea.addEventListener("input", checkcaret);
-        textarea.addEventListener("paste", checkcaret);
-        textarea.addEventListener("cut", checkcaret);
-        textarea.addEventListener("mousemove", checkcaret);
-        textarea.addEventListener("select", checkcaret);
-        textarea.addEventListener("selectstart", checkcaret);
+        clearInterval(interval);
         textarea.addEventListener("focus", focus, {once: true});
     }
 
     function checkcaret() {
-        currentCaretStart = textarea.selectionStart;
-        currentCaretEnd = textarea.selectionEnd;
+        if (currentCelNumber !== cellId) return;
+        const caretHasMoved = (
+            selectionDirection != textarea.selectionDirection ||
+            selectionStart != textarea.selectionStart ||
+            selectionEnd != textarea.selectionEnd
+        );
+        
+        selectionStart = textarea.selectionStart;
+        selectionEnd = textarea.selectionEnd;
+        selectionDirection = textarea.selectionDirection;
+        
+        if (!caretHasMoved) return;
+
+        socket.emit("caretUpdate", {
+            selectionStart,
+            selectionEnd,
+            selectionDirection,
+            cel: cellId,
+            key: fileData.key,
+            filename: fileData.name,
+        });
     }
 
     return textarea
