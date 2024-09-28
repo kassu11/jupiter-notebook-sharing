@@ -23,7 +23,7 @@ jobs:
         node-version: ${{ matrix.node-version }}
 
     - name: Build
+      working-directory: backend
       run: |
-        dc backend
         npm install
         npm run build
