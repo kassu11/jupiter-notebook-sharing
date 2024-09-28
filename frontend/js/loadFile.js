@@ -21,7 +21,7 @@ const allRoomUsers = {};
 
 const socket = socketIO("https://jupiter-notebook-sharing.onrender.com/", {
     auth: (token) => {
-        token({ token: "test" });
+        token({ token: "access" });
     }
 });
 
@@ -53,7 +53,6 @@ setInterval(async () => {
             main: while(i < localCells.length) {
                 if (localCells[i]?.merge_id == null) continue;
                 for(let j = 0; j < fileCells.length; j++) {
-                    // console.log(localCells[i]?.merge_id, fileCells[j]?.merge_id)
                     if (localCells[i]?.merge_id === fileCells[j]?.merge_id) {
                         localCells[i].metadata = fileCells[j].metadata;
                         localCells[i].cell_type = fileCells[j].cell_type;
@@ -80,7 +79,6 @@ setInterval(async () => {
                 i++;
             }
 
-
             console.log(fileData.name, file.lastModified);
         }
     }
@@ -106,15 +104,12 @@ host.addEventListener("click", async () => {
         id: socket.id
     });
 
-    console.log(jsonDataCopyForServer(filesData));
-
     initLocalFileInfos(key, filesData);
     socketJoin(key);
 });
 
 join.addEventListener("click", async e => {
     const roomKey = prompt("Enter room key");
-    // loadProjectFolder();
 
     const fetchedFiles = await api.getLoadedFiles({key: roomKey});
     files[roomKey] = fetchedFiles.files;
@@ -168,7 +163,6 @@ function socketJoin(key) {
 
     socket.on(`caretUpdate${key}`, caretUpdate);
     function caretUpdate(caret) {
-        console.log(caret)
         const oldCaret = allRoomUsers[caret.userId];
         allRoomUsers[caret.userId] = caret;
         const oldIndex = oldCaret == null ? -1 : files[key][caret.filename].data.cells.findIndex(row => row.merge_id === oldCaret.cel);
@@ -296,11 +290,14 @@ function socketJoin(key) {
                 unappliedChanges.shift();
                 needToUpdateCaret = false;
             }
-        } 
+        }
 
-        // console.log("Changes", change, unappliedChanges)
+        const currentTextarea = document.querySelectorAll("textarea")[currentCelNumber];
+        const start = currentTextarea.selectionStart;
+        const end = currentTextarea.selectionEnd;
+        const dir = currentTextarea.selectionDirection;
         changeTextarea([change, ...unappliedChanges]);
-        if (needToUpdateCaret) updateCaret(change);
+        if (needToUpdateCaret) updateCaret(change, start, end, dir);
         if (currentFileName === change.filename) updateUserCarets(change);
         
         for(let i = 0; i < unappliedChanges.length; i++) {
@@ -336,13 +333,12 @@ function socketJoin(key) {
         }
     }
 
-    function updateCaret(change) {
+    function updateCaret(change, start, end, dir) {
         const textarea = document.querySelectorAll("textarea")[currentCelNumber];
         const delta = change.data.length - (change.end - change.start);
-        const start = textarea.selectionStart + delta;
-        const end = textarea.selectionEnd + delta;
-        if (change.end <= textarea.selectionStart) textarea.selectionStart = start;
-        if (change.end <= textarea.selectionEnd) textarea.selectionEnd = end;
+        if (change.end <= start) textarea.selectionStart = start + delta;
+        if (change.end <= end) textarea.selectionEnd = end + delta;
+        textarea.selectionDirection = dir;
 
         selectionStart = textarea.selectionStart;
         selectionEnd = textarea.selectionEnd;

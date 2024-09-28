@@ -34,12 +34,12 @@ const hostedFiles = {}
 const hostingUsers = {}
 
 const hostFiles = async (req, res) => {
-	const { id, key, fileData, socketId } = req.body;
-	// console.log(id, key, fileData, req.body);
+	const { id, key, fileData } = req.body;
 
 	console.log(hostedFiles, hostingUsers)
 
 	try {
+		if (id == null) throw new Error("Socket id is not valid");
 		if (key in hostedFiles) throw new Error("Dublicate room key");
 		if (!key || key.length < 2) throw new Error("Key is not long enough");
 		if (id in hostingUsers) {
@@ -50,7 +50,6 @@ const hostFiles = async (req, res) => {
 			file.changes = new Filo(30);
 		}
 		hostingUsers[id] = key;
-		// socketIO.emit("post/" + id, { likes: 1, dislikes: 2 });
 		res.json({"ok": 200});
 	} catch (err) {
 		res.status(500).json({ message: err.message });
