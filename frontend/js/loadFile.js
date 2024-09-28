@@ -253,6 +253,7 @@ function socketJoin(key) {
                 const cellContainer = createCellElement(fileData, change.data);
                 document.querySelectorAll(".cell")[cellIndex].after(cellContainer);
                 updateTextAreaHeight(cellContainer.querySelector("textarea"));
+                
             }
             fileData.data.cells.splice(cellIndex + 1, 0, change.data);
             initLocalFileInfos(key, [fileData]);
@@ -434,7 +435,9 @@ function displayFileData(fileData) {
     for (const cell of fileData.data.cells) {
         const cellContainer = createCellElement(fileData, cell);
         notebook.append(cellContainer);
-        updateTextAreaHeight(cellContainer.querySelector("textarea"));
+        const textArea = cellContainer.querySelector("textarea")
+        setTimeout(() => updateTextAreaHeight(textArea), 100);
+        updateTextAreaHeight(textArea);
     }
 }
 
@@ -551,7 +554,7 @@ function createCellElement(fileData, cellData) {
 
 function updateTextAreaHeight(textarea) {
     textarea.style.height = "0px";
-    textarea.style.height = textarea.scrollHeight + 5 + "px";
+    textarea.style.height = textarea.scrollHeight + 2 + "px";
 }
 
 function createTextArea(cellId, fileData) {
