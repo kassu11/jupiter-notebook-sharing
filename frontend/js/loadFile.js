@@ -31,7 +31,6 @@ window.addEventListener("resize", () => {
 window.addEventListener("keydown", async (event) => {
     if (event.ctrlKey && event.code === "KeyS") {
         event.preventDefault();
-        // console.log(currentFileName)
         const fileData = files[currentKey]?.[currentFileName];
         if (fileData) {
             await writeJsonDataToUserFile(fileData);
@@ -261,14 +260,20 @@ function socketJoin(key) {
             if (fileActive) {
                 const nextCell = document.querySelectorAll(".cell")[cellIndex - 1];
                 const current = document.querySelectorAll(".cell")[cellIndex];
-                current.after(nextCell);
+                const activeCellElem = document.activeElement?.closest(".cell");
+
+                if(activeCellElem === current) current.after(nextCell);
+                else nextCell.before(current);
             }
             [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
         } else if (change.type === "moveDown") {
             if (fileActive) {
                 const prevCell = document.querySelectorAll(".cell")[cellIndex + 1];
                 const current = document.querySelectorAll(".cell")[cellIndex];
-                current.before(prevCell);
+                const activeCellElem = document.activeElement?.closest(".cell");
+                
+                if(activeCellElem === current) current.before(prevCell);
+                else prevCell.after(current);
             }
 
             [fileData.data.cells[cellIndex + 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex + 1]]
