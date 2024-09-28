@@ -1,12 +1,9 @@
-name: Build and Deploy Static Website
+name: Build and Deploy to GitHub Pages
 
 on:
   push:
     branches:
       - main  # Runs the action on pushes to the "main" branch
-  pull_request:
-    branches:
-      - main  # Optionally run on pull requests
 
 jobs:
   build:
@@ -17,28 +14,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up Node.js
+      # Step 2: Set up Node.js in frontend directory
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18' # Specify Node.js version
+          cache: 'npm' # Cache npm dependencies
+          cache-dependency-path: frontend/package-lock.json # Specify the lock file location
 
       # Step 3: Install dependencies
       - name: Install dependencies
-        run: |
-          cd frontend # Navigate to the frontend folder
-          npm install
+        working-directory: frontend
+        run: npm install
 
       # Step 4: Build the project
       - name: Build project
-        run: |
-          cd frontend
-          npm run build
+        working-directory: frontend
+        run: npm run build
 
-      # Step 5: Upload build artifacts (optional)
-      # This step uploads the `build` directory, useful for deploying later
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+      # Step 5: Upload the build artifacts for GitHub Pages
+      - name: Upload artifact for deployment
+        uses: actions/upload-pages-artifact@v2
         with:
-          name: build
-          path: frontend/build # Path to your build folder
+          path: frontend/build # The directory of your built static files
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write  # Grants access to deploy to GitHub Pages
+      id-token: write # Necessary for deployment authentication
+
+    steps:
+      # Step 6: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v2
