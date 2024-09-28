@@ -21,7 +21,7 @@ const allRoomUsers = {};
 
 const socket = socketIO("https://jupiter-notebook-sharing.onrender.com/", {
     auth: (token) => {
-        token({ token: "test" });
+        token({ token: "access" });
     }
 });
 
@@ -104,8 +104,6 @@ host.addEventListener("click", async () => {
         id: socket.id
     });
 
-    console.log(jsonDataCopyForServer(filesData));
-
     initLocalFileInfos(key, filesData);
     socketJoin(key);
 });
@@ -165,7 +163,6 @@ function socketJoin(key) {
 
     socket.on(`caretUpdate${key}`, caretUpdate);
     function caretUpdate(caret) {
-        console.log(caret)
         const oldCaret = allRoomUsers[caret.userId];
         allRoomUsers[caret.userId] = caret;
         const oldIndex = oldCaret == null ? -1 : files[key][caret.filename].data.cells.findIndex(row => row.merge_id === oldCaret.cel);
