@@ -177,15 +177,11 @@ function socketJoin(key) {
         
         if (oldIndex !== -1 && oldIndex !== curIndex) {
             const text = files[oldCaret.key][oldCaret.filename].data.cells[oldIndex].source;
-            console.log("Old");
-            // Delete old caret
             updateUserCaretElement(oldCaret, text, oldIndex);
-        } else {
-            const text = files[key][caret.filename].data.cells[curIndex].source;
-            updateUserCaretElement(caret, text, curIndex);
         }
-        
-        
+
+        const text = files[key][caret.filename].data.cells[curIndex].source;
+        updateUserCaretElement(caret, text, curIndex);
     });
 
     function updateUserCaretElement(caret, text, cellIndex) {
@@ -312,8 +308,12 @@ function socketJoin(key) {
 
     function updateCaret(change) {
         const textarea = document.querySelectorAll("textarea")[currentCelNumber];
-        if (change.end <= textarea.selectionStart) textarea.selectionStart += change.data.length - (change.end - change.start);
-        if (change.end <= textarea.selectionEnd) textarea.selectionEnd += change.data.length - (change.end - change.start);
+        const delta = change.data.length - (change.end - change.start);
+        const start = textarea.selectionStart + delta;
+        const end = textarea.selectionEnd + delta;
+        if (change.end <= textarea.selectionStart) textarea.selectionStart = start;
+        if (change.end <= textarea.selectionEnd) textarea.selectionEnd = end;
+
         selectionStart = textarea.selectionStart;
         selectionEnd = textarea.selectionEnd;
         selectionDirection = textarea.selectionDirection;

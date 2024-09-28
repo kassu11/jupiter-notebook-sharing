@@ -13,6 +13,7 @@ body {
     position: absolute;
     inset: 0px;
     margin: 0px;
+    font-family: system-ui;
 }
 
 #root {
@@ -81,6 +82,11 @@ body {
         flex-direction: column;
         padding: 10px;
         gap: 10px;
+        font-family: "JetBrainsMono";
+
+        * {
+            font: inherit;
+        }
 
         .textContainer {
             position: relative;
