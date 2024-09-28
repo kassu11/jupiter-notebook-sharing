@@ -167,7 +167,8 @@ join.addEventListener("click", async e => {
 
 function socketJoin(key) {
 
-    socket.on(`caretUpdate${key}`, caret => {
+    socket.on(`caretUpdate${key}`, caretUpdate);
+    function caretUpdate(caret) {
         console.log(caret)
         const oldCaret = allRoomUsers[caret.userId];
         allRoomUsers[caret.userId] = caret;
@@ -182,7 +183,7 @@ function socketJoin(key) {
 
         const text = files[key][caret.filename].data.cells[curIndex].source;
         updateUserCaretElement(caret, text, curIndex);
-    });
+    }
 
     function updateUserCaretElement(caret, text, cellIndex) {
         const caretPre = document.querySelectorAll(".cell .userCarets")[cellIndex];
@@ -281,11 +282,11 @@ function socketJoin(key) {
     });
 
     socket.on(`fileUpdates${key}`, change => {
-        
         const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
         let needToUpdateCaret = change.cel === currentCelNumber && currentFileName === change.filename;
         if(unappliedChanges.length) {
-            if (JSON.stringify(change) === JSON.stringify(unappliedChanges[0])) {
+            const removeUserId = (key, val) => key === "userId" ? undefined : val;
+            if (JSON.stringify(change, removeUserId) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
                 needToUpdateCaret = false;
             }
@@ -294,17 +295,40 @@ function socketJoin(key) {
         // console.log("Changes", change, unappliedChanges)
         changeTextarea([change, ...unappliedChanges]);
         if (needToUpdateCaret) updateCaret(change);
+        if (currentFileName === change.filename) updateUserCarets(change);
+        
         for(let i = 0; i < unappliedChanges.length; i++) {
             unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
             unappliedChanges[i].id++;
         }
 
         const fileData = files[change.key][change.filename];
-        const cell = fileData.data.cells.find(v => v.merge_id === change.cel);
+        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+        const cell = fileData.data.cells[cellIndex];
         const sourceText = cell.source;
         cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
         cell.id++;
+
+        if (needToUpdateCaret) {
+            caretUpdate({
+                ...change,
+                selectionDirection: "forward",
+                selectionEnd: change.start,
+                selectionStart: change.start,
+            });
+        } else updateUserCaretElement(change, cell.source, cellIndex);
+
     });
+
+    function updateUserCarets(change) {
+        const delta = change.data.length - (change.end - change.start);
+        for(const caret of Object.values(allRoomUsers)) {
+            if (caret.cel !== change.cel || caret.key !== change.key || caret.filename !== change.filename) continue;
+
+            if (change.end <= caret.selectionStart) caret.selectionStart += delta;
+            if (change.end <= caret.selectionEnd) caret.selectionEnd += delta;
+        }
+    }
 
     function updateCaret(change) {
         const textarea = document.querySelectorAll("textarea")[currentCelNumber];
