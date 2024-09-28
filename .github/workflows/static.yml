@@ -44,9 +44,19 @@ jobs:
       # Step 5: Upload build artifacts (optional)
       # This step uploads the `build` directory, useful for deploying later
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-pages-artifact@v2
         with:
           path: frontend/dist # Path to your build folder
+          name: github-pages  # Make sure the artifact name is consistent
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write  # Grants access to deploy to GitHub Pages
+      id-token: write # Necessary for deployment authentication
+
+    steps:
+      # Step 6: Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v1
+        uses: actions/deploy-pages@v2
