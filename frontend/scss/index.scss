@@ -120,7 +120,6 @@ body {
             &.colorHighlight {
                 textarea {
                     color: transparent;
-                    caret-color: black;
                 }
                 
                 .userCarets {
@@ -145,6 +144,7 @@ body {
             textarea {
                 position: relative;
                 z-index: 2;
+                caret-color: black;
 
                 &::selection {
                     color: white;
