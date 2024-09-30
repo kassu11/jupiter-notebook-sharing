@@ -29,6 +29,9 @@ body {
     flex-shrink: 0;
     background: skyblue;
     display: flex;
+    place-items: center;
+    gap: 5px;
+    padding-inline: 10px;
 
     #users {
         margin-left: auto;

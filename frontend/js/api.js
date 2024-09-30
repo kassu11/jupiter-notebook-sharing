@@ -25,5 +25,10 @@ export const api = {
         const response = await fetch(baseURL + `files/loaded/${key}`);
 
         return await response.json();
+    },
+    getWelcomePage: async() => {
+        const response = await fetch("https://jupiter-notebook-sharing.onrender.com/");
+
+        return await response.json();
     }
 }

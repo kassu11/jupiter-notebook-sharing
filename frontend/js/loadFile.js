@@ -38,6 +38,13 @@ window.addEventListener("keydown", async (event) => {
             await writeJsonDataToUserFile(fileData);
         }
     }
+});
+
+window.addEventListener("blur", async () => {
+    const fileData = files[currentKey]?.[currentFileName];
+    if (fileData && document.querySelector("#autosave").checked) {
+        await writeJsonDataToUserFile(fileData);
+    }
 })
 
 setInterval(async () => {
@@ -52,23 +59,34 @@ setInterval(async () => {
             const fileCells = [...jsonData.cells];
 
             let i = 0;
+            let elementIndex = 0;
             main: while(i < localCells.length) {
                 if (localCells[i]?.merge_id == null) continue;
                 for(let j = 0; j < fileCells.length; j++) {
                     if (localCells[i]?.merge_id === fileCells[j]?.merge_id) {
                         localCells[i].metadata = fileCells[j].metadata;
-                        localCells[i].cell_type = fileCells[j].cell_type;
+                        // localCells[i].cell_type = fileCells[j].cell_type;
                         localCells[i].outputs = fileCells[j].outputs;
                         localCells[i].execution_count = fileCells[j].execution_count;
-                        // if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
 
-                        // changeInsideCell(
-                        //     fileData.key,
-                        //     fileData.name,
-                        //     localCells[i].merge_id,
-                        //     localCells[i].source,
-                        //     fileCells[j].source
-                        // )
+                        const elementIndex = fileData.data.cells.findIndex(cell => cell.merge_id === localCells[i]?.merge_id);
+                        const cellElem = document.querySelectorAll(".cell")[elementIndex];
+                        updateOutputFromCellElem(cellElem, fileCells[j]);
+
+                        console.log(fileCells[j].last_id)
+
+                        if (fileCells[j].last_id === localCells[i].id) {
+                            if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
+    
+                            changeInsideCell(
+                                fileData.key,
+                                fileData.name,
+                                localCells[i].merge_id,
+                                localCells[i].source,
+                                fileCells[j].source
+                            )
+                        }
+
 
                         fileCells.splice(j, 1);
                         localCells.splice(i, 1);
@@ -92,7 +110,11 @@ lag.addEventListener("click", async e => {
 });
 
 host.addEventListener("click", async () => {
-    if (socket.id == null) return prompt("Server is not yet open, try again");
+    if (socket.id == null) {
+        alert("Server is not yet open, try again");
+        await api.getWelcomePage();
+        return;
+    }
     const key = prompt("Set custom room key");
     const filesData = await loadProjectFolder();
     files[key] = filesData;
@@ -112,7 +134,7 @@ host.addEventListener("click", async () => {
 });
 
 join.addEventListener("click", async e => {
-    if (socket.id == null) return prompt("Server is not yet open, try again");
+    if (socket.id == null) return alert("Server is not yet open, try again");
     const roomKey = prompt("Enter room key");
 
     const fetchedFiles = await api.getLoadedFiles({key: roomKey});
@@ -539,7 +561,13 @@ function createCellElement(fileData, cellData) {
 
     cellContainer.append(typeSelection, textareaContainer, buttonContainer);
     updateCodeHighlight(cellContainer);
+    updateOutputFromCellElem(cellContainer, cellData);
 
+    return cellContainer;
+}
+
+function updateOutputFromCellElem(cellElement, cellData) {
+    cellElement.querySelector("details")?.remove();
 
     if (cellData.outputs?.length) {
         const outputContainer = document.createElement("details");
@@ -548,7 +576,7 @@ function createCellElement(fileData, cellData) {
         const summary = document.createElement("summary");
         summary.textContent = "Hide output";
         outputContainer.append(summary);
-        for (const { text, data, ...output } of cellData.outputs) {
+        for (const { text, data } of cellData.outputs) {
             if (data) {
                 if ("image/png" in data) {
                     const img = document.createElement("img");
@@ -574,10 +602,8 @@ function createCellElement(fileData, cellData) {
                 outputContainer.append(pre)
             }
         }
-        cellContainer.append(outputContainer)
+        cellElement.append(outputContainer)
     }
-
-    return cellContainer;
 }
 
 function updateCodeHighlight(cellElement) {
@@ -697,6 +723,7 @@ async function writeJsonDataToUserFile(fileData) {
     for(const cell of clone.cells) {
         cell.source = cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n");
         if (cell.source.length <= 1) cell.source = cell.source.join("");
+        cell.last_id = cell.id;
         delete cell.id;
     }
     const stream = await fileData.handler.createWritable();
