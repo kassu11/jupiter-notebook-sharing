@@ -167,13 +167,18 @@ function socketJoin(key) {
     socket.on(`caretUpdate${key}`, caretUpdate);
     function caretUpdate(caret) {
         const oldCaret = allRoomUsers[caret.userId];
-        allRoomUsers[caret.userId] = caret;
+        if (oldCaret) allRoomUsers[caret.userId] = {...oldCaret, ...caret};
+        else {
+            caret.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
+            allRoomUsers[caret.userId] = caret;
+        }
         
         users.textContent = "";
         for(const user of Object.values(allRoomUsers)) {
             const div = document.createElement("div");
             div.classList.toggle("inactive", user.cel === -1);
             div.textContent = user.userId.substring(0, 3);
+            div.style.background = user.color;
             div.addEventListener("click", () => {
                 const fileData = files[user.key][user.filename];
                 if (!fileData) return;
@@ -353,10 +358,9 @@ function updateUserCaretElement(caret, text, cellIndex) {
             const mask = 1<<parseInt(j);
             if ((bitArray[i] & mask) !== mask) return;
             const span = document.createElement("span");
-            // span.style.background = "#ff00004f";
+            span.style.setProperty("--bg", caret.color);
             curSpan.append(span);
             curSpan = span;
-            // console.log(i, start, caret)
             if (caret.min === caret.max) {
                 span.classList.add("backward", "noFill");
             } else if(i + 1 === caret.max && caret.selectionDirection == "forward") {
@@ -579,7 +583,9 @@ function createCellElement(fileData, cellData) {
 function updateCodeHighlight(cellElement) {
     const selection = cellElement.querySelector("select");
     const textarea = cellElement.querySelector("textarea");
+    const textContainer = cellElement.querySelector(".textContainer");
     cellElement.querySelector(".highlight")?.remove();
+    
 
     if (selection.value === "code") {
         const codeHighlightPre = document.createElement("pre");
@@ -589,9 +595,9 @@ function updateCodeHighlight(cellElement) {
         codeHighlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.python, "python");
         codeHighlightPre.append(codeHighlightCode);
         textarea.parentElement.prepend(codeHighlightPre);
-        textarea.classList.add("code");
+        textContainer.classList.add("colorHighlight");
     } else {
-        textarea.classList.remove("code");
+        textContainer.classList.remove("colorHighlight");
     }
 }
 
