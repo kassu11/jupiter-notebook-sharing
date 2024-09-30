@@ -60,15 +60,15 @@ setInterval(async () => {
                         localCells[i].cell_type = fileCells[j].cell_type;
                         localCells[i].outputs = fileCells[j].outputs;
                         localCells[i].execution_count = fileCells[j].execution_count;
-                        if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
+                        // if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
 
-                        changeInsideCell(
-                            fileData.key,
-                            fileData.name,
-                            localCells[i].merge_id,
-                            localCells[i].source,
-                            fileCells[j].source
-                        )
+                        // changeInsideCell(
+                        //     fileData.key,
+                        //     fileData.name,
+                        //     localCells[i].merge_id,
+                        //     localCells[i].source,
+                        //     fileCells[j].source
+                        // )
 
                         fileCells.splice(j, 1);
                         localCells.splice(i, 1);
@@ -92,6 +92,7 @@ lag.addEventListener("click", async e => {
 });
 
 host.addEventListener("click", async () => {
+    if (socket.id == null) return prompt("Server is not yet open, try again");
     const key = prompt("Set custom room key");
     const filesData = await loadProjectFolder();
     files[key] = filesData;
@@ -111,6 +112,7 @@ host.addEventListener("click", async () => {
 });
 
 join.addEventListener("click", async e => {
+    if (socket.id == null) return prompt("Server is not yet open, try again");
     const roomKey = prompt("Enter room key");
 
     const fetchedFiles = await api.getLoadedFiles({key: roomKey});
