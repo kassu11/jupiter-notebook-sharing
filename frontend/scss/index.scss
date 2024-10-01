@@ -166,7 +166,6 @@ body {
                 position: absolute;
                 user-select: none;
                 pointer-events: none;
-                // color: transparent;
                 --bg: rgb(255, 0, 0);
 
                 &:not(:empty) + textarea {

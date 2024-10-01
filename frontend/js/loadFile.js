@@ -6,8 +6,8 @@ const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
 const host = document.querySelector("#host");
 const join = document.querySelector("#join");
-const lag = document.querySelector("#lag");
 const users = document.querySelector("#users");
+const username = document.querySelector("#username");
 
 const files = {};
 const allFileHandlers = [];
@@ -30,6 +30,22 @@ const socket = socketIO("https://jupiter-notebook-sharing.onrender.com/", {
 window.addEventListener("resize", () => {
     document.querySelectorAll("textarea").forEach(updateTextAreaHeight);
 });
+
+
+username.addEventListener("input", () => {
+    if (!currentKey.length) return;
+    socket.emit("caretUpdate", {
+        cel: currentCelId,
+        key: currentKey,
+        filename: currentFileName,
+        selectionStart,
+        selectionEnd,
+        selectionDirection,
+        username: username.value,
+    });
+});
+
+
 window.addEventListener("keydown", async (event) => {
     if (event.ctrlKey && event.code === "KeyS") {
         event.preventDefault();
@@ -105,9 +121,9 @@ setInterval(async () => {
 }, 100);
 
 
-lag.addEventListener("click", async e => {
-    socket.emit("lag", "data")
-});
+// lag.addEventListener("click", async e => {
+//     socket.emit("lag", "data")
+// });
 
 host.addEventListener("click", async () => {
     if (socket.id == null) {
@@ -199,7 +215,8 @@ function socketJoin(key) {
         for(const user of Object.values(allRoomUsers)) {
             const div = document.createElement("div");
             div.classList.toggle("inactive", user.cel === -1);
-            div.textContent = user.userId.substring(0, 3);
+            if (user.username) div.textContent = user.username;
+            else div.textContent = user.userId.substring(0, 3);
             div.style.background = user.color;
             div.addEventListener("click", () => {
                 const fileData = files[user.key][user.filename];
@@ -679,6 +696,7 @@ function createTextArea(cellId, fileData) {
             cel: cellId,
             key: fileData.key,
             filename: fileData.name,
+            username: username.value
         });
     }
 
