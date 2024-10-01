@@ -106,6 +106,7 @@ body {
     width: 100%;
     padding-right: 10px;
     overflow-y: auto;
+    padding-bottom: 700px;
 
     .cell {
         width: 100%;
@@ -170,6 +171,10 @@ body {
                 user-select: none;
                 pointer-events: none;
                 padding: 0px;
+
+                code {
+                    padding-right: 6px;
+                }
             }
     
             .userCarets {
