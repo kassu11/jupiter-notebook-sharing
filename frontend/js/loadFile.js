@@ -47,7 +47,7 @@ username.addEventListener("input", () => {
 
 
 window.addEventListener("keydown", async (event) => {
-    if (event.ctrlKey && event.code === "KeyS") {
+    if ((event.ctrlKey || event.metaKey) && event.code === "KeyS") {
         event.preventDefault();
         const fileData = files[currentKey]?.[currentFileName];
         if (fileData) {
