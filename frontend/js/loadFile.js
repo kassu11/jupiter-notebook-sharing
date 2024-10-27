@@ -1,6 +1,7 @@
 import socketIO from "socket.io-client";
 import {api} from "./api";
 import Prism from "./prism";
+import * as monaco from 'monaco-editor';
 
 const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
@@ -8,6 +9,201 @@ const host = document.querySelector("#host");
 const join = document.querySelector("#join");
 const users = document.querySelector("#users");
 const username = document.querySelector("#username");
+
+self.MonacoEnvironment = {
+    getWorkerUrl: function (moduleId, label) {
+        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+        self.MonacoEnvironment = { baseUrl: '${window.location.origin}' };`
+        )}`;
+    }
+};
+
+const editorContainer = document.getElementById("editor-container");
+
+editorContainer.addEventListener("wheel", e => {
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+}, {capture: true})
+
+// Initialize the Monaco Editor
+const editor1 = monaco.editor.create(editorContainer, {
+    value: `// Sample code\nfunction hello() {\n  console.log("Hello, world!");\n}`,
+    language: "javascript", // Set the language to JavaScript
+    theme: "vs-dark",        // Set the editor theme
+    scrollBeyondLastLine: false,
+    // scrollbar: {
+    //     vertical: "hidden",
+    //     horizontal: "hidden",
+    // },
+    wordWrap: true,
+    minimap: {
+        enabled: false
+    },
+    hover: {
+        enabled: false
+    },
+    padding: {
+        top: 10,
+        bottom: 10
+    }
+});
+
+
+// setInterval(e => {
+//     // console.log(editor1.getSelection());
+
+
+//     editor1.setValue(`# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`)
+
+// }, 2000);
+
+
+editor1.layout({
+    width: editorContainer.clientWidth,
+    height: editor1.getScrollHeight()
+});
+
+
+console.log(editor1.getValue());
+
+editor1.onDidChangeCursorSelection(e => {
+    console.log("cursor", e);
+})
+
+editor1.onDidChangeModelContent(event => {
+    console.log("change content", event);
+    editor1.layout({
+        width: editorContainer.clientWidth,
+        height: editor1.getContentHeight()
+    });
+});
+
+editor1.onDidFocusEditorText(event => {
+    console.log("Focus");
+
+    changeEditorLanguage("javascript")
+})
+
+editor1.onDidBlurEditorText(event => {
+    console.log("Blur")
+    // editor1.setSelection({
+    //     endColumn: 0, 
+    //     endLineNumber: 0, 
+    //     positionColumn: 0, 
+    //     positionLineNumber: 0,
+    //     selectionStartColumn: 0,
+    //     selectionStartLineNumber: 0,
+    //     startColumn: 0,
+    //     startLineNumber: 0
+    // });
+
+    // Inser new row
+    // insertText(
+    //     `# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`,
+    //     {
+    //         startLineNumber: 0,
+    //         startColumn: 0,
+    //         endLineNumber: 0,
+    //         endColumn: 0
+    //     },
+    //     true,
+    // )
+
+    changeEditorLanguage("markdown")
+
+    // Replace hello
+    insertText(
+        `kassu11`,
+        {
+            startLineNumber: 2,
+            startColumn: 5,
+            endLineNumber: 2,
+            endColumn: 10
+        },
+    )
+
+    addCustomSelections(selections);
+
+
+    // editor1.setValue(`# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`)
+});
+
+function changeEditorLanguage(newLanguage) {
+    const model = editor1.getModel(); // Get the current model
+    monaco.editor.setModelLanguage(model, newLanguage); // Change the language
+  }
+
+
+
+function insertText(text, position, addToHistory = true) {
+    editor1.pushUndoStop();
+    editor1.executeEdits(
+        null, // Optional: source of the edit, can be `null`
+        [
+            {
+                range: new monaco.Range(position.startLineNumber, position.startColumn, position.endLineNumber, position.endColumn),
+                text: text,
+                forceMoveMarkers: true // Keeps markers (like selections) in place
+            }
+        ],
+    );
+
+    editor1.popUndoStop();
+
+}
+
+// Function to create and apply custom selections
+let lastDecoration = null;
+function addCustomSelections(selections) {
+    // Define decorations based on the selections
+    const decorations = selections.map(selection => ({
+        range: new monaco.Range(
+            selection.startLineNumber,
+            selection.startColumn,
+            selection.endLineNumber,
+            selection.endColumn
+        ),
+        options: {
+            className: `user-selection-${selection.userId}`, // CSS class to style this selection
+            isWholeLine: false,
+            // after: {
+            //     content: "after",
+            //     inlineClassName: "afterDec",
+            //     inlineClassNameAffectsLetterSpacing: true
+            // },
+            // before: {
+            //     content: "before",
+            //     inlineClassName: "afterDec",
+            //     inlineClassNameAffectsLetterSpacing: true
+            // }
+        }
+    }));
+
+    // Apply decorations
+    // editor1.removeDecorations([1, 2, 3]);
+    lastDecoration?.clear();
+    lastDecoration = editor1.createDecorationsCollection(decorations);
+}
+
+// Define CSS styles for different users
+const style = document.createElement('style');
+style.textContent = `
+    .user-selection-1 { background-color: rgba(255, 0, 0, 0.3); } /* User 1's selection in red */
+    .user-selection-2 { background-color: rgba(0, 0, 255, 0.3); } /* User 2's selection in blue */
+    .user-selection-3 { background-color: rgba(0, 255, 0, 0.3); } /* User 3's selection in green */
+  `;
+document.head.appendChild(style);
+
+// Example: Adding selections for different users
+const selections = [
+    { userId: 1, startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 9 },  // "function" word for User 1
+    { userId: 2, startLineNumber: 3, startColumn: 3, endLineNumber: 3, endColumn: 13 }, // "console.log" for User 2
+    { userId: 3, startLineNumber: 4, startColumn: 1, endLineNumber: 4, endColumn: 2 }   // "}" bracket for User 3
+];
+
+// Apply custom selections
+addCustomSelections(selections);
+
 
 const files = {};
 const allFileHandlers = [];
@@ -268,7 +464,7 @@ function socketJoin(key) {
             if (fileActive) {
                 const cellContainer = createCellElement(fileData, change.data);
                 document.querySelectorAll(".cell")[cellIndex].after(cellContainer);
-                updateTextAreaHeight(cellContainer.querySelector("textarea"));
+                // updateTextAreaHeight(cellContainer.querySelector("textarea"));
                 
             }
             fileData.data.cells.splice(cellIndex + 1, 0, change.data);
@@ -499,9 +695,14 @@ function displayFileData(fileData) {
         const cell = fileData.data.cells[i];
         const cellContainer = createCellElement(fileData, cell);
         notebook.append(cellContainer);
-        const textArea = cellContainer.querySelector("textarea")
-        setTimeout(() => updateTextAreaHeight(textArea), 100);
-        updateTextAreaHeight(textArea);
+        // const textArea = cellContainer.querySelector("textarea")
+        // setTimeout(() => updateTextAreaHeight(textArea), 100);
+        // updateTextAreaHeight(textArea);
+        cell.editor.layout({
+            width: 700,
+            height: cell.editor.getContentHeight()
+        });
+
         if(users.find(u => u.cel === cell.merge_id)) {
             updateUserCaretElement({cel: cell.merge_id}, cell.source, i);
         }
@@ -522,7 +723,8 @@ function createCellElement(fileData, cellData) {
             key: fileData.key,
             newType: typeSelection.value
         });
-    })
+    });
+
     const markdownOption = document.createElement("option");
     markdownOption.value = "markdown";
     markdownOption.textContent = "Markdown";
@@ -556,14 +758,47 @@ function createCellElement(fileData, cellData) {
         socket.emit("cellChange", {type: "delete", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
     });
     buttonContainer.append(upButton, downButton, addButton, deleteButton);
-     
-    const textareaContainer = document.createElement("div");
-    textareaContainer.classList.add("textContainer");
+
+
+    const editorContainer = document.createElement("div");
+    editorContainer.addEventListener("wheel", e => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+    }, {capture: true});
+    editorContainer.classList.add("editorContainer"); // TODO: remove
+    const editor = monaco.editor.create(editorContainer, {
+        value: cellData.source,
+        language: cellData.cell_type === "code" ? "python" : cellData.cell_type,
+        theme: "vs-dark",        // Set the editor theme
+        scrollBeyondLastLine: false,
+        wordWrap: true,
+        minimap: {
+            enabled: false
+        },
+        hover: {
+            enabled: false
+        },
+        padding: {
+            top: 10,
+            bottom: 10
+        }
+    });
+
+    editor.onDidChangeModelContent(event => {
+        editor.layout({
+            width: 700,
+            height: editor.getContentHeight()
+        });
+    });
+    
+
+    // TODO: probably need to remove this when writing in file
+    cellData.editor = editor;
     const pre = document.createElement("pre");
     pre.classList.add("userCarets");
     const textarea = createTextArea(cellData.merge_id, fileData);
     textarea.value = cellData.source;
-    textareaContainer.append(pre, textarea);
+    // editorContainer.append(pre, textarea);
     
 
     let textBeforeInput = "";
@@ -576,7 +811,7 @@ function createCellElement(fileData, cellData) {
         updateCodeHighlight(cellContainer);
     })
 
-    cellContainer.append(typeSelection, textareaContainer, buttonContainer);
+    cellContainer.append(typeSelection, editorContainer, buttonContainer);
     updateCodeHighlight(cellContainer);
     updateOutputFromCellElem(cellContainer, cellData);
 
@@ -624,6 +859,9 @@ function updateOutputFromCellElem(cellElement, cellData) {
 }
 
 function updateCodeHighlight(cellElement) {
+    return;
+
+    // TODO: Remove
     const selection = cellElement.querySelector("select");
     const textarea = cellElement.querySelector("textarea");
     const textContainer = cellElement.querySelector(".textContainer");
