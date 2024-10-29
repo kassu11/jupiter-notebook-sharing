@@ -1,7 +1,8 @@
 import socketIO from "socket.io-client";
 import {api} from "./api";
-import Prism from "./prism";
+// import Prism from "./prism";
 import * as monaco from 'monaco-editor';
+import {createCustomCursor} from "./customCursor";
 
 const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
@@ -23,7 +24,7 @@ const editorContainer = document.getElementById("editor-container");
 editorContainer.addEventListener("wheel", e => {
     e.stopPropagation();
     e.stopImmediatePropagation();
-}, {capture: true})
+}, {capture: true});
 
 // Initialize the Monaco Editor
 const editor1 = monaco.editor.create(editorContainer, {
@@ -58,10 +59,24 @@ const editor1 = monaco.editor.create(editorContainer, {
 // }, 2000);
 
 
-editor1.layout({
-    width: editorContainer.clientWidth,
-    height: editor1.getScrollHeight()
+window.addEventListener("resize", () => {
+    editor1.layout({
+        width: editorContainer.clientWidth,
+        height: editor1.getScrollHeight()
+    });
+    
+    resizeAllEditors();
 });
+
+function resizeAllEditors() {
+    editors.forEach(editor => {
+        editor.layout({
+            width: editor.getContainerDomNode().clientWidth,
+            height: editor.getContentHeight()
+        });
+    });
+}
+
 
 
 console.log(editor1.getValue());
@@ -72,10 +87,7 @@ editor1.onDidChangeCursorSelection(e => {
 
 editor1.onDidChangeModelContent(event => {
     console.log("change content", event);
-    editor1.layout({
-        width: editorContainer.clientWidth,
-        height: editor1.getContentHeight()
-    });
+    
 });
 
 editor1.onDidFocusEditorText(event => {
@@ -109,20 +121,20 @@ editor1.onDidBlurEditorText(event => {
     //     true,
     // )
 
-    changeEditorLanguage("markdown")
+    // changeEditorLanguage("markdown")
 
     // Replace hello
-    insertText(
-        `kassu11`,
-        {
-            startLineNumber: 2,
-            startColumn: 5,
-            endLineNumber: 2,
-            endColumn: 10
-        },
-    )
+    // insertText(
+    //     `kassu11`,
+    //     {
+    //         startLineNumber: 2,
+    //         startColumn: 5,
+    //         endLineNumber: 2,
+    //         endColumn: 10
+    //     },
+    // )
 
-    addCustomSelections(selections);
+    // addCustomSelections(selections);
 
 
     // editor1.setValue(`# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`)
@@ -131,78 +143,97 @@ editor1.onDidBlurEditorText(event => {
 function changeEditorLanguage(newLanguage) {
     const model = editor1.getModel(); // Get the current model
     monaco.editor.setModelLanguage(model, newLanguage); // Change the language
-  }
-
-
-
-function insertText(text, position, addToHistory = true) {
-    editor1.pushUndoStop();
-    editor1.executeEdits(
-        null, // Optional: source of the edit, can be `null`
-        [
-            {
-                range: new monaco.Range(position.startLineNumber, position.startColumn, position.endLineNumber, position.endColumn),
-                text: text,
-                forceMoveMarkers: true // Keeps markers (like selections) in place
-            }
-        ],
-    );
-
-    editor1.popUndoStop();
-
 }
+
+
+
+// function insertText(text, position, addToHistory = true) {
+//     editor1.pushUndoStop();
+//     editor1.executeEdits(
+//         null, // Optional: source of the edit, can be `null`
+//         [
+//             {
+//                 range: new monaco.Range(position.startLineNumber, position.startColumn, position.endLineNumber, position.endColumn),
+//                 text: text,
+//                 forceMoveMarkers: true // Keeps markers (like selections) in place
+//             }
+//         ],
+//     );
+
+//     editor1.popUndoStop();
+
+// }
 
 // Function to create and apply custom selections
-let lastDecoration = null;
-function addCustomSelections(selections) {
-    // Define decorations based on the selections
-    const decorations = selections.map(selection => ({
-        range: new monaco.Range(
-            selection.startLineNumber,
-            selection.startColumn,
-            selection.endLineNumber,
-            selection.endColumn
-        ),
-        options: {
-            className: `user-selection-${selection.userId}`, // CSS class to style this selection
-            isWholeLine: false,
-            // after: {
-            //     content: "after",
-            //     inlineClassName: "afterDec",
-            //     inlineClassNameAffectsLetterSpacing: true
-            // },
-            // before: {
-            //     content: "before",
-            //     inlineClassName: "afterDec",
-            //     inlineClassNameAffectsLetterSpacing: true
-            // }
-        }
-    }));
+// let lastDecoration = null;
+// function addCustomSelections(selections) {
+//     // Define decorations based on the selections
+//     const decorations = selections.map(selection => ({
+//         range: new monaco.Range(
+//             selection.startLineNumber,
+//             selection.startColumn,
+//             selection.endLineNumber,
+//             selection.endColumn
+//         ),
+//         options: {
+//             className: `user-selection-${selection.userId}`, // CSS class to style this selection
+//             isWholeLine: false,
+//             // after: {
+//             //     content: "after",
+//             //     inlineClassName: "afterDec",
+//             //     inlineClassNameAffectsLetterSpacing: true
+//             // },
+//             // before: {
+//             //     content: "before",
+//             //     inlineClassName: "afterDec",
+//             //     inlineClassNameAffectsLetterSpacing: true
+//             // }
+//         }
+//     }));
 
-    // Apply decorations
-    // editor1.removeDecorations([1, 2, 3]);
-    lastDecoration?.clear();
-    lastDecoration = editor1.createDecorationsCollection(decorations);
-}
+//     // Apply decorations
+//     // editor1.removeDecorations([1, 2, 3]);
+//     lastDecoration?.clear();
+//     lastDecoration = editor1.createDecorationsCollection(decorations);
+// }
 
-// Define CSS styles for different users
-const style = document.createElement('style');
-style.textContent = `
-    .user-selection-1 { background-color: rgba(255, 0, 0, 0.3); } /* User 1's selection in red */
-    .user-selection-2 { background-color: rgba(0, 0, 255, 0.3); } /* User 2's selection in blue */
-    .user-selection-3 { background-color: rgba(0, 255, 0, 0.3); } /* User 3's selection in green */
-  `;
-document.head.appendChild(style);
 
-// Example: Adding selections for different users
-const selections = [
-    { userId: 1, startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 9 },  // "function" word for User 1
-    { userId: 2, startLineNumber: 3, startColumn: 3, endLineNumber: 3, endColumn: 13 }, // "console.log" for User 2
-    { userId: 3, startLineNumber: 4, startColumn: 1, endLineNumber: 4, endColumn: 2 }   // "}" bracket for User 3
-];
+editor1.onDidContentSizeChange(() => {
+    editor1.layout({
+        width: editorContainer.clientWidth,
+        height: editor1.getContentHeight()
+    });
+})
 
-// Apply custom selections
-addCustomSelections(selections);
+const selections2 = [{
+    positionColumn: 18,
+    positionLineNumber: 2,
+    selectionStartColumn: 6,
+    selectionStartLineNumber: 1,
+    userId: 1,
+    username: "kassu11"
+}];
+
+
+createCustomCursor(editor1, selections2)
+
+// class CustomCursor {
+//     constructor() {
+
+//     }
+
+//     remove() {
+
+//     }
+
+//     refresh() {
+
+//     }
+
+//     update() {
+
+//     }
+// }
 
 
 const files = {};
@@ -685,29 +716,73 @@ async function createFile(file, parentUl, fileNames, path) {
     parentUl.append(li);
 }
 
+const editors = [];
+
 function displayFileData(fileData) {
     notebook.textContent = "";
+    editors.length = 0;
     currentFileName = fileData.name;
     currentKey = fileData.key;
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
     for (let i = 0; i < fileData.data.cells.length; i++) {
         const cell = fileData.data.cells[i];
-        const cellContainer = createCellElement(fileData, cell);
-        notebook.append(cellContainer);
-        // const textArea = cellContainer.querySelector("textarea")
-        // setTimeout(() => updateTextAreaHeight(textArea), 100);
-        // updateTextAreaHeight(textArea);
-        cell.editor.layout({
-            width: 700,
-            height: cell.editor.getContentHeight()
-        });
 
-        if(users.find(u => u.cel === cell.merge_id)) {
-            updateUserCaretElement({cel: cell.merge_id}, cell.source, i);
-        }
-    }
+        if (cell.editor) {
+            notebook.append(cell.editor.getContainerDomNode());
+            resizeAllEditors();
+        } else {
+            const editorContainer = document.createElement("div");
+            editorContainer.classList.add("editor-container");
+            notebook.append(editorContainer);
     
+            editorContainer.addEventListener("wheel", e => {
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }, {capture: true});
+    
+            const editor = monaco.editor.create(editorContainer, {
+                value: cell.source,
+                language: "python",
+                theme: "vs-dark",
+                scrollBeyondLastLine: false,
+                wordWrap: true,
+                minimap: {
+                    enabled: false
+                },
+                hover: {
+                    enabled: false
+                },
+                padding: {
+                    top: 10,
+                    bottom: 10
+                }
+            });
+
+            editor.onDidContentSizeChange(() => {
+                editor.layout({
+                    width: editorContainer.clientWidth,
+                    height: editor.getContentHeight()
+                });
+            })
+
+            cell.editor = editor;
+            // editorContainer.style.width = null;
+        }
+        
+        editors.push(cell.editor);
+ 
+        // const cellContainer = createCellElement(fileData, cell);
+        // notebook.append(cellContainer);
+        // // const textArea = cellContainer.querySelector("textarea")
+        // // setTimeout(() => updateTextAreaHeight(textArea), 100);
+        // // updateTextAreaHeight(textArea);
+
+        // if(users.find(u => u.cel === cell.merge_id)) {
+        //     updateUserCaretElement({cel: cell.merge_id}, cell.source, i);
+        // }
+    }
+
 }
 
 function createCellElement(fileData, cellData) {

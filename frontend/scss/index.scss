@@ -70,15 +70,9 @@ body {
 
 #editor-container { // TODO: remove
     position: relative;
-    width: 700px;
+    width: 100%;
+    min-width: 200px;
     border-radius: 10px;
-}
-
-.editorContainer {
-    position: relative;
-    width: 700px;
-    // height: 300px;
-    flex-shrink: 0;
 }
 
 .afterDec {
