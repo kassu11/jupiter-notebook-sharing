@@ -64,7 +64,7 @@ window.addEventListener("resize", () => {
         width: editorContainer.clientWidth,
         height: editor1.getScrollHeight()
     });
-    
+
     resizeAllEditors();
 });
 
@@ -489,12 +489,12 @@ function socketJoin(key) {
         if (change.type === "delete") {
             fileData.data.cells.splice(cellIndex, 1);
             if (fileActive) {
-                document.querySelectorAll(".cell")[cellIndex].remove();
+                document.querySelectorAll(".notebook-cell")[cellIndex].remove();
             }
         } else if (change.type === "add") {
             if (fileActive) {
                 const cellContainer = createCellElement(fileData, change.data);
-                document.querySelectorAll(".cell")[cellIndex].after(cellContainer);
+                document.querySelectorAll(".notebook-cell")[cellIndex].after(cellContainer);
                 // updateTextAreaHeight(cellContainer.querySelector("textarea"));
                 
             }
@@ -502,9 +502,9 @@ function socketJoin(key) {
             initLocalFileInfos(key, [fileData]);
         } else if (change.type === "moveUp") {
             if (fileActive) {
-                const nextCell = document.querySelectorAll(".cell")[cellIndex - 1];
-                const current = document.querySelectorAll(".cell")[cellIndex];
-                const activeCellElem = document.activeElement?.closest(".cell");
+                const nextCell = document.querySelectorAll(".notebook-cell")[cellIndex - 1];
+                const current = document.querySelectorAll(".notebook-cell")[cellIndex];
+                const activeCellElem = document.activeElement?.closest(".notebook-cell");
 
                 if(activeCellElem === current) current.after(nextCell);
                 else nextCell.before(current);
@@ -512,9 +512,9 @@ function socketJoin(key) {
             [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
         } else if (change.type === "moveDown") {
             if (fileActive) {
-                const prevCell = document.querySelectorAll(".cell")[cellIndex + 1];
-                const current = document.querySelectorAll(".cell")[cellIndex];
-                const activeCellElem = document.activeElement?.closest(".cell");
+                const prevCell = document.querySelectorAll(".notebook-cell")[cellIndex + 1];
+                const current = document.querySelectorAll(".notebook-cell")[cellIndex];
+                const activeCellElem = document.activeElement?.closest(".notebook-cell");
                 
                 if(activeCellElem === current) current.before(prevCell);
                 else prevCell.after(current);
@@ -524,7 +524,7 @@ function socketJoin(key) {
         } else if(change.type === "changeType") {
             fileData.data.cells[cellIndex].cell_type = change.newType;
             if (fileActive) {
-                const cellElem = document.querySelectorAll(".cell")[cellIndex];
+                const cellElem = document.querySelectorAll(".notebook-cell")[cellIndex];
                 cellElem.querySelector("select").value = change.newType;
                 updateCodeHighlight(cellElem);
             }
@@ -728,22 +728,76 @@ function displayFileData(fileData) {
     for (let i = 0; i < fileData.data.cells.length; i++) {
         const cell = fileData.data.cells[i];
 
+
+        const cellContainer = document.createElement("div");
+        cellContainer.classList.add("notebook-cell");
+
+
+        const typeSelection = document.createElement("select");
+        typeSelection.addEventListener("change", () => {
+            socket.emit("cellChange", {
+                type: "changeType",
+                cel: cell.merge_id,
+                filename: fileData.name,
+                key: fileData.key,
+                newType: typeSelection.value
+            });
+        });
+
+        const markdownOption = document.createElement("option");
+        markdownOption.value = "markdown";
+        markdownOption.textContent = "Markdown";
+        const codeOption = document.createElement("option");
+        codeOption.value = "code";
+        codeOption.textContent = "Code";
+        typeSelection.append(markdownOption, codeOption);
+        typeSelection.value = cell.cell_type;
+
+        const buttonContainer = document.createElement("div");
+        buttonContainer.classList.add("button-container");
+        const upButton = document.createElement("button");
+        upButton.textContent = "Up";
+        upButton.addEventListener("click", () => {
+            socket.emit("cellChange", {type: "moveUp", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+        });
+        const downButton = document.createElement("button");
+        downButton.textContent = "Down";
+        downButton.addEventListener("click", () => {
+            socket.emit("cellChange", {type: "moveDown", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+        });
+
+        const addButton = document.createElement("button");
+        addButton.textContent = "Add";
+        addButton.addEventListener("click", () => {
+            socket.emit("cellChange", {type: "add", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+        });
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        deleteButton.addEventListener("click", () => {
+            socket.emit("cellChange", {type: "delete", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+        });
+        buttonContainer.append(upButton, downButton, addButton, deleteButton);
+
+        
+        
         if (cell.editor) {
-            notebook.append(cell.editor.getContainerDomNode());
+            cellContainer.append(typeSelection, cell.editor.getContainerDomNode(), buttonContainer);
+            notebook.append(cellContainer);
             resizeAllEditors();
         } else {
             const editorContainer = document.createElement("div");
             editorContainer.classList.add("editor-container");
-            notebook.append(editorContainer);
+            cellContainer.append(typeSelection, editorContainer, buttonContainer);
+            notebook.append(cellContainer);
     
             editorContainer.addEventListener("wheel", e => {
                 e.stopPropagation();
                 e.stopImmediatePropagation();
             }, {capture: true});
-    
+
             const editor = monaco.editor.create(editorContainer, {
                 value: cell.source,
-                language: "python",
+                language: cell.cell_type === "code" ? "python" : "markdown",
                 theme: "vs-dark",
                 scrollBeyondLastLine: false,
                 wordWrap: true,
@@ -769,6 +823,8 @@ function displayFileData(fileData) {
             cell.editor = editor;
             // editorContainer.style.width = null;
         }
+
+        updateOutputFromCellElem(cellContainer, cell);
         
         editors.push(cell.editor);
  

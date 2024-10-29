@@ -1,10 +1,39 @@
-#notebook {
-    overflow-y: scroll;
-}
-
 .editor-container {
     position: relative;
     width: 100%;
     min-width: 200px;
     border-radius: 10px;
+}
+
+.notebook-cell {
+    display: grid;
+    gap: 5px;
+    background-color: rgb(30 30 30);
+    padding: 10px;
+    border-radius: 5px;
+
+    select {
+        border-color: black;
+    }
+
+    button, select {
+        font-family: "JetBrainsMono";
+    }
+
+    .button-container {
+        display: flex;
+        gap: 5px;
+    }
+
+    .outputContainer {
+            
+        summary {
+            cursor: pointer;
+        }
+
+        > * {
+            overflow: auto;
+            max-width: 100%;
+        }
+    }
 }
