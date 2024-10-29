@@ -69,41 +69,53 @@ const socketConnection = (socket) => {
 		}
 	});
 
-	socket.on("changeFile", change => {
-		try {
-			const socketKey = `fileUpdates${change.key}`
-			const fileData = hostedFiles[change.key][change.filename];
-            const cell = fileData.data.cells.find(v => v.merge_id === change.cel);
-			const changeFilo = fileData.changes;
-	
-			if(cell.id !== change.id) {
-				console.log("Wrong id");
-				for(const oldChange of changeFilo.iterator()) {
-					if (oldChange.id < change.id) continue;
-					if (oldChange.cel != change.cel) continue;
-					if (oldChange.id > change.id) throw new Error("Invalid id");
+    socket.on("changeFile", changePackage => {
+        try {
+            const socketKey = `fileUpdates${changePackage.key}`
+            const fileData = hostedFiles[changePackage.key][changePackage.filename];
+            const cell = fileData.data.cells.find(v => v.merge_id === changePackage.cel);
+            const changeFilo = fileData.changes;
 
-					change = advanceChangeForward(oldChange, change);
-					change.id++;
+            if (changePackage.id > cell.id) throw new Error("id is too large");
+            
+            if (cell.id !== changePackage.id) {
+                console.log("Wrong id");
+                for (const oldChangePackage of changeFilo.iterator()) {
+                    if (oldChangePackage.id < changePackage.id) continue;
+                    if (oldChangePackage.cel != changePackage.cel) continue;
+                    if (oldChangePackage.id > changePackage.id) throw new Error("Invalid id");
+                    
+                    for (const oldChange of oldChangePackage.changes) {
+                        for(let i = 0; i < changePackage.changes.length; i++) {
+                            changePackage.changes[i] = advanceChangeForward(oldChange, changePackage.changes[i]);
+                        }
+                    }
+                    changePackage.id++;
 
-					console.log("old: ", oldChange);
-				}
+                    console.log("old: ", oldChangePackage);
+                }
 
-				if (change.id !== cell.id) throw new Error("Too old id");
-			}
+                if (changePackage.id !== cell.id) throw new Error("Too old id");
+            }
 
-			const sourceText = cell.source;
-			const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
-			cell.source = newText;
+            const advancedClone = structuredClone(changePackage.changes);
+            for(let i = 1; i < advancedClone.length; i++) {
+                for(let j = 0; j < i; j++) {
+                    advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+                }
+            }
+            
+            for(const change of advancedClone) {
+                cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);;
+            }
             cell.id++;
+            changeFilo.push({...changePackage, changes: advancedClone});
 
-			changeFilo.push(change);
-	
-			socketIO.emit(socketKey, {...change, userId: socket.id});
-			// socket.broadcast.emit(socketKey, change);
-		} catch (e) {
-			console.error(e)
-		}
+            socketIO.emit(socketKey, { ...changePackage, userId: socket.id });
+            // socket.broadcast.emit(socketKey, change);
+        } catch (e) {
+            console.error(e)
+        }
 	});
 
 };

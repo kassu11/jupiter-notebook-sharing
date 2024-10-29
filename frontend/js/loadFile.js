@@ -531,45 +531,66 @@ function socketJoin(key) {
         }
     });
 
-    socket.on(`fileUpdates${key}`, change => {
-        const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
-        const fileData = files[change.key][change.filename];
-        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
-        let needToUpdateCaret = change.cel === currentCelId && currentFileName === change.filename;
+    socket.on(`fileUpdates${key}`, changePackage => {
+        console.log("Package reseaved", changePackage);
+
+        const unappliedChanges = allUnappliedChanges[key + changePackage.filename][changePackage.cel].unappliedChanges;
+        const fileData = files[changePackage.key][changePackage.filename];
+        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === changePackage.cel);
+        const cell = fileData.data.cells[cellIndex];
+        let needToUpdateCaret = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
         if(unappliedChanges.length) {
             const removeUserId = (key, val) => key === "userId" ? undefined : val;
-            if (JSON.stringify(change, removeUserId) === JSON.stringify(unappliedChanges[0])) {
+            // console.log(JSON.stringify(changePackage, removeUserId), JSON.stringify(unappliedChanges[0]));
+            if (JSON.stringify(changePackage, removeUserId) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
                 needToUpdateCaret = false;
             }
         }
 
-        const currentTextarea = document.querySelectorAll("textarea")[cellIndex];
-        const start = currentTextarea?.selectionStart;
-        const end = currentTextarea?.selectionEnd;
-        const dir = currentTextarea?.selectionDirection;
-        changeTextarea([change, ...unappliedChanges]);
-        if (needToUpdateCaret) updateCaret(change, start, end, dir, cellIndex);
-        if (currentFileName === change.filename) updateUserCarets(change);
-        
-        for(let i = 0; i < unappliedChanges.length; i++) {
-            unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
-            unappliedChanges[i].id++;
+        for(let i = 1; i < changePackage.changes.length; i++) {
+            changePackage.changes[i] = advanceChangeForward(changePackage.changes[i - 1], changePackage.changes[i]);
         }
 
-        const cell = fileData.data.cells[cellIndex];
-        const sourceText = cell.source;
-        cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
+        changeEditorText(
+            cell.editor,
+            cell.source,
+            [changePackage, ...unappliedChanges]
+        );
+
+        // const currentTextarea = document.querySelectorAll("textarea")[cellIndex];
+        // const start = currentTextarea?.selectionStart;
+        // const end = currentTextarea?.selectionEnd;
+        // const dir = currentTextarea?.selectionDirection;
+        // if (needToUpdateCaret) updateCaret(change, start, end, dir, cellIndex);
+        // if (currentFileName === changePackage.filename) updateUserCarets(change);
+        
+        for (let i = 0; i < unappliedChanges.length; i++) {
+            for (const change of changePackage.changes) {
+                for(let j = 0; j < unappliedChanges[i].changes.length; j++) {
+                    unappliedChanges[i].changes[j] = advanceChangeForward(change, unappliedChanges[i].changes[j]);
+                }
+            }
+            unappliedChanges[i].id++;
+        }
+        for (const change of changePackage.changes) {
+
+
+            const sourceText = cell.source;
+            cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
+
+            // if (needToUpdateCaret) {
+            //     // caretUpdate({
+            //     //     ...change,
+            //     //     selectionDirection: "forward",
+            //     //     selectionEnd: change.start,
+            //     //     selectionStart: change.start,
+            //     // });
+            // } else updateUserCaretElement(change, cell.source, cellIndex);
+
+        }
         cell.id++;
 
-        if (needToUpdateCaret) {
-            caretUpdate({
-                ...change,
-                selectionDirection: "forward",
-                selectionEnd: change.start,
-                selectionStart: change.start,
-            });
-        } else updateUserCaretElement(change, cell.source, cellIndex);
 
     });
 
@@ -812,6 +833,16 @@ function displayFileData(fileData) {
                     bottom: 10
                 }
             });
+
+            editor.onDidChangeModelContent(changes => {
+                // console.log(changes);
+
+                console.log("Change detected", changes);
+
+                if(changes.isFlush) return;
+
+                changeInsideCell2(fileData.key, fileData.name, cell.merge_id, changes)
+            })
 
             editor.onDidContentSizeChange(() => {
                 editor.layout({
@@ -1214,6 +1245,57 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     
     socket.emit("changeFile", revertedChange);
 }
+
+function changeInsideCell2(key, filename, cellId, vscodeChanges) {
+    const cell = files[key][filename].data.cells.find(v => v.merge_id === cellId);
+    const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
+
+   
+    
+    const changes = vscodeChanges.changes.map(change => {
+        return {
+            start: change.rangeOffset,
+            end: change.rangeOffset + change.rangeLength,
+            data: change.text
+        };
+        // changeBase.start = change.rangeOffset;
+        // changeBase.end = change.rangeOffset + change.rangeLength;
+        // changeBase.data = 
+    });
+
+    
+
+    console.log(changes, unappliedChanges);
+
+    const advancedClone = structuredClone(unappliedChanges.map(v => v.changes).flat());
+    for(let i = 1; i < advancedClone.length; i++) {
+        for(let j = 0; j < i; j++) {
+            // console.log(advancedClone, advancedClone[j], advancedClone[i])
+            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+        }
+    }
+
+    advancedClone.forEach(change => {
+        delete change.stop;
+        delete change.replaceEnd;
+    });
+
+    let revertedChanges = structuredClone(changes);
+    for(let i = advancedClone.length - 1; i >= 0; i--) {
+        for(let j = 0; j < revertedChanges.length; j++) {
+            revertedChanges[j] = revertChangeBackward(advancedClone[i], revertedChanges[j]);
+        }
+    }
+
+    const changePackage = {key, cel: cellId, filename, id: cell.id, changes: revertedChanges};
+
+    unappliedChanges.push(changePackage);
+    
+    socket.emit("changeFile", changePackage);
+}
+
+
+
 function advanceChangeForward(oldChange, change) {
     const clone = structuredClone(change);
     const oldDelta = oldChange.end - oldChange.start;
@@ -1307,6 +1389,44 @@ function revertChangeBackward(oldChange, change) {
     }
 
     return clone
+}
+
+function changeEditorText(editor, source, rootChangesPackages) {
+    // console.log("Change pre element", rootChanges);
+
+    const advancedClone = structuredClone(rootChangesPackages.map(rootPackage => rootPackage.changes).flat());
+    for(let i = 1; i < advancedClone.length; i++) {
+        for(let j = 0; j < i; j++) {
+            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+        }
+    }
+
+    if (rootChangesPackages[0]?.filename !== currentFileName) return;
+
+    for(const change of advancedClone) {
+        // if(newText === null) {
+        //     const fileData = files[change.key][change.filename];
+        //     cellNum = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+        //     newText = fileData.data.cells[cellNum].source;
+        // }
+        source = source.substring(0, change.start) + change.data + source.substring(change.end);
+    }
+
+    // if(cellNum === -1) return;
+    // const textarea = notebook.querySelectorAll("textarea")[cellNum];
+    // const selectionStart = textarea.selectionStart;
+    // const selectionEnd = textarea.selectionEnd;
+    // const selectionDirection = textarea.selectionDirection;
+    // textarea.value = newText;
+    const selection = editor.getSelections();
+    console.log();
+    editor.setValue(source);
+    editor.setSelections(selection);
+    // textarea.selectionStart = selectionStart;
+    // textarea.selectionEnd = selectionEnd;
+    // textarea.selectionDirection = selectionDirection;
+    // updateTextAreaHeight(textarea);
+    // updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
 }
 
 function changeTextarea(rootChanges) {
