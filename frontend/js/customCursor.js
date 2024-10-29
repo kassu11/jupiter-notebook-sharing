@@ -1,6 +1,6 @@
 import * as monaco from 'monaco-editor';
 
-export const createCustomCursor = (editor, selections) => {
+export const createCustomCursor = (editor, {user, selections}) => {
     const addCustomSelections = (selections) => {
         const decorations = selections.map(selection => ({
             range: new monaco.Range(
@@ -10,7 +10,7 @@ export const createCustomCursor = (editor, selections) => {
                 Math.max(selection.positionColumn, selection.selectionStartColumn),
             ),
             options: {
-                className: `user-selection user-color-${selection.userId}`,
+                className: `user-selection user-color-${1}`,
             }
         }));
     
@@ -18,16 +18,14 @@ export const createCustomCursor = (editor, selections) => {
     }
 
     const createCursorDecoration = selections => {
-        return selections.map(({positionLineNumber: line, positionColumn: column, userId}) => {
-            return editor.createDecorationsCollection([
-                {
-                    range: new monaco.Range(line, column, line, column),
-                    options: {
-                        className: `fake-cursor user-color-${userId}`
-                    }
-                }
-            ]);
-        })
+        return editor.createDecorationsCollection(
+            selections.map(({positionLineNumber: line, positionColumn: column}) => ({
+               range: new monaco.Range(line, column, line, column),
+               options: {
+                   className: `fake-cursor user-color-${1}`
+               }
+           }))
+        );
     };
     
     
@@ -37,19 +35,19 @@ export const createCustomCursor = (editor, selections) => {
             return monaco.editor.ContentWidgetPositionPreference.ABOVE
         }
 
-        return selections.map(({positionLineNumber: line, positionColumn: column, userId, username}) => {
+        return selections.map(({positionLineNumber: line, positionColumn: column}) => {
             const widgetId = `label-widget-${line}-${column}`;
             const widget = {
                 suppressMouseDown: false,
                 getId: () => widgetId,
                 getDomNode: () => {
                     const domNode = document.createElement("div");
-                    domNode.classList.add("cursor-lable", `user-color-${userId}`);
-                    domNode.innerText = username;
+                    domNode.classList.add("cursor-lable", `user-color-${1}`);
+                    domNode.innerText = user.username;
                     return domNode;
                 },
                 getPosition: () => ({
-                    position: { lineNumber: line, column: Math.max(1, Math.ceil(column - username.length / 2)) },
+                    position: { lineNumber: line, column: Math.max(1, Math.ceil(column - user.username.length / 2)) },
                     preference: [getPosition(line)]
                 })
             };
@@ -61,9 +59,19 @@ export const createCustomCursor = (editor, selections) => {
         });
     };
 
-    addCustomSelections(selections);
-    createCursorDecoration(selections);
-    createLabelWidget(selections);
+    console.log(selections);
+
+    user.clearCursor?.();
+
+    const decorations = addCustomSelections(selections);
+    const cursors = createCursorDecoration(selections);
+    const widgets = createLabelWidget(selections);
+
+    user.clearCursor = () => {
+        decorations.clear();
+        cursors.clear();
+        widgets.forEach(widget => editor.removeContentWidget(widget))
+    }
 
     // editor1.removeContentWidget(t);
 }

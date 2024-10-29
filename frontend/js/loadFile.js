@@ -205,14 +205,18 @@ editor1.onDidContentSizeChange(() => {
     });
 })
 
-const selections2 = [{
-    positionColumn: 18,
-    positionLineNumber: 2,
-    selectionStartColumn: 6,
-    selectionStartLineNumber: 1,
-    userId: 1,
-    username: "kassu11"
-}];
+const selections2 = {
+    selections: [{
+        positionColumn: 18,
+        positionLineNumber: 2,
+        selectionStartColumn: 6,
+        selectionStartLineNumber: 1,
+    }],
+    user: {
+        username: "kassu11",
+        userId: 1,
+    }
+};
 
 
 createCustomCursor(editor1, selections2)
@@ -429,7 +433,61 @@ join.addEventListener("click", async e => {
 });
 
 function socketJoin(key) {
-    socket.on(`caretUpdate${key}`, caretUpdate);
+    socket.on(`caretUpdate${key}`, caretUpdate2);
+    function caretUpdate2(carets) {
+        const oldCarets = allRoomUsers[carets.userId];
+        if (oldCarets) allRoomUsers[carets.userId] = {...oldCarets, ...carets};
+        else {
+            carets.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
+            allRoomUsers[carets.userId] = carets;
+        }
+        
+        users.textContent = "";
+        for(const user of Object.values(allRoomUsers)) {
+            const div = document.createElement("div");
+            div.classList.toggle("inactive", user.cel === -1);
+            if (!user.username) user.username = user.userId.substring(0, 3);
+            div.textContent = user.username.substring(0, 15);
+            div.style.background = user.color;
+            div.addEventListener("click", () => {
+                const fileData = files[user.key][user.filename];
+                if (!fileData) return;
+                if (currentFileName !== user.filename) displayFileData(fileData);
+                if (user.cel !== -1) {
+                    const index = fileData.data.cells.findIndex(cell => cell.merge_id === user.cel);
+                    document.querySelectorAll(".cell")[index]?.scrollIntoView();
+                }
+            })
+            users.append(div);
+        }
+
+
+
+        const oldIndex = oldCarets == null ? -1 : files[key][carets.filename].data.cells.findIndex(row => row.merge_id === oldCarets.cel);
+        const curIndex = files[key][carets.filename].data.cells.findIndex(row => row.merge_id === carets.cel);
+        const editor = files[key][carets.filename].data.cells[curIndex].editor;
+        if (currentFileName !== carets.filename) return;
+        
+        if (oldIndex !== -1 && oldIndex !== curIndex) {
+            // createCustomCursor()
+
+            // Remove selection
+        }
+
+        if (curIndex === -1) return;
+        console.log(carets, {
+            selections: [{
+                positionColumn: 18,
+                positionLineNumber: 2,
+                selectionStartColumn: 6,
+                selectionStartLineNumber: 1,
+            }],
+            userId: 1,
+            username: "kassu11"
+        })
+        createCustomCursor(editor, {...carets, user: allRoomUsers[carets.userId]});
+    }
+
     function caretUpdate(caret) {
         const oldCaret = allRoomUsers[caret.userId];
         if (oldCaret) allRoomUsers[caret.userId] = {...oldCaret, ...caret};
@@ -835,14 +893,29 @@ function displayFileData(fileData) {
             });
 
             editor.onDidChangeModelContent(changes => {
-                // console.log(changes);
-
                 console.log("Change detected", changes);
 
                 if(changes.isFlush) return;
 
                 changeInsideCell2(fileData.key, fileData.name, cell.merge_id, changes)
-            })
+            });
+
+            editor.onDidChangeCursorSelection(e => {
+                console.log("cursor", e);
+
+                // socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
+                const selections = editor.getSelections();
+
+                console.log(selections);
+
+                socket.emit("caretUpdate", {
+                    selections,
+                    cel: cell.merge_id,
+                    key: fileData.key,
+                    filename: fileData.name,
+                    username: username.value
+                });
+            });
 
             editor.onDidContentSizeChange(() => {
                 editor.layout({
