@@ -51,15 +51,11 @@ export const createCustomCursor = (editor, {user, selections}) => {
                     preference: [getPosition(line)]
                 })
             };
-        
-            // editor.getModel().getValueInRange()
-        
+
             editor.addContentWidget(widget);
             return widget;
         });
     };
-
-    console.log(selections);
 
     user.clearCursor?.();
 
