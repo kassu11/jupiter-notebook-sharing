@@ -424,10 +424,6 @@ join.addEventListener("click", async e => {
 
     recursiveFoldering(Object.entries(fileTreeObject), fileTree);
 
-    console.log(files)
-
-    console.log(fetchedFiles, Object.entries(fileTreeObject));
-
     initLocalFileInfos(roomKey, fetchedFiles.files);
     socketJoin(roomKey);
 });
@@ -461,14 +457,14 @@ function socketJoin(key) {
             users.append(div);
         }
 
-        console.log(carets);
-
         const curIndex = files[key][carets.filename].data.cells.findIndex(row => row.merge_id === carets.cel);
         if (curIndex === -1) return allRoomUsers[carets.userId]?.clearCursor?.();
         if (currentFileName !== carets.filename) return;
         
         const editor = files[key][carets.filename].data.cells[curIndex].editor;
-        createCustomCursor(editor, {...carets, user: allRoomUsers[carets.userId]});
+        console.assert(allRoomUsers[carets.userId].clearCursor, "WTF???")
+        if (carets.selections) createCustomCursor(editor, {...carets, user: allRoomUsers[carets.userId]});
+        else allRoomUsers[carets.userId]?.clearCursor?.();
     }
 
     // TODO: Remove
@@ -574,26 +570,25 @@ function socketJoin(key) {
     });
 
     socket.on(`fileUpdates${key}`, changePackage => {
-        console.log("Package reseaved", changePackage);
-
         const unappliedChanges = allUnappliedChanges[key + changePackage.filename][changePackage.cel].unappliedChanges;
         const fileData = files[changePackage.key][changePackage.filename];
         const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === changePackage.cel);
         const cell = fileData.data.cells[cellIndex];
-        let needToUpdateCaret = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
+        let needToUpdateSelection = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
         if(unappliedChanges.length) {
             const removeUserId = (key, val) => key === "userId" ? undefined : val;
             // console.log(JSON.stringify(changePackage, removeUserId), JSON.stringify(unappliedChanges[0]));
             if (JSON.stringify(changePackage, removeUserId) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
-                console.log("Shift?????")
-                needToUpdateCaret = false;
+                needToUpdateSelection = false;
             }
         }
 
-        const selections = preprocessSelection(cell.editor, cell.editor.getSelections());
+        const selections = cell.editor ?
+            preprocessSelection(cell.editor, cell.editor.getSelections())
+            : [];
 
-        changeEditorText(
+        if (cell.editor) changeEditorText(
             cell.editor,
             cell.source,
             [changePackage, ...unappliedChanges]
@@ -604,6 +599,20 @@ function socketJoin(key) {
                 changePackage.changes[i] = advanceChangeForward(changePackage.changes[j], changePackage.changes[i]);
             }
         }
+
+        if (needToUpdateSelection) {
+            // caretUpdate({
+            //     ...change,
+            //     selectionDirection: "forward",
+            //     selectionEnd: change.start,
+            //     selectionStart: change.start,
+            // });
+
+            cell.editor.setSelections(selections.map(selection => {
+                return getUpdatedSelectionByChange(cell.editor, changePackage.changes, selection);
+            }));
+
+        } 
 
         // const currentTextarea = document.querySelectorAll("textarea")[cellIndex];
         // const start = currentTextarea?.selectionStart;
@@ -621,36 +630,19 @@ function socketJoin(key) {
             unappliedChanges[i].id++;
         }
 
-        cell.source = cell.editor.getValue();
+        // cell.source = cell.editor.getValue();
 
-        // for (const change of changePackage.changes) {
-
-
-            // const sourceText = cell.source;
-            // cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
-
-        console.log(selections, allRoomUsers)
-
-        if (needToUpdateCaret) {
-            // caretUpdate({
-            //     ...change,
-            //     selectionDirection: "forward",
-            //     selectionEnd: change.start,
-            //     selectionStart: change.start,
-            // });
-
-            cell.editor.setSelections(selections.map(selection => {
-                return getUpdatedSelectionByChange(cell.editor, changePackage.changes, selection);
-            }));
-
-        } 
+        for (const change of changePackage.changes) {
+            cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);
+        }
+        cell.id++;
+        
             // else {
             //     console.log("User update?????")
             //     // updateUserCaretElement(change, cell.source, cellIndex);
             // }
 
         // }
-        cell.id++;
 
 
     });
@@ -702,8 +694,6 @@ function socketJoin(key) {
         const { lineNumber: positionLineNumber, column: positionColumn } =
             editor.getModel().getPositionAt(selection.end);
 
-        console.log(selectionStartLineNumber, selectionStartColumn, positionLineNumber, positionColumn)
-
         return { selectionStartLineNumber, selectionStartColumn, positionLineNumber, positionColumn }
     }
     
@@ -720,11 +710,8 @@ function socketJoin(key) {
 
     function updateCaret2(changePackage, selections, editor) {
         // const textarea = document.querySelectorAll("textarea")[index];
-        console.log("sel", selections);
         for(const change of changePackage.changes) {
             for(const selection of selections) {
-                console.log("pos", editor.getTopForPosition(selection.startLineNumber, selection.startColumn));
-    
                 const delta = change.data.length - (change.end - change.start);
                 if (change.end <= start) textarea.selectionStart = start + delta;
                 if (change.end <= end) textarea.selectionEnd = end + delta;
@@ -968,15 +955,16 @@ function displayFileData(fileData) {
             });
 
             editor.onDidChangeModelContent(changes => {
-                console.log("Change detected", changes);
+                console.info("onDidChangeModelContent");
 
                 if(changes.isFlush) return;
 
                 changeInsideCell2(fileData.key, fileData.name, cell.merge_id, changes)
             });
 
-            editor.onDidChangeCursorSelection(e => {
-                console.log("cursor", e);
+            editor.onDidChangeCursorSelection(selection => {
+                console.info("onDidChangeCursorSelection", selection.reason);
+                if (selection.reason === 1) return
 
                 // socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
                 const selections = editor.getSelections();
@@ -1429,10 +1417,6 @@ function changeInsideCell2(key, filename, cellId, vscodeChanges) {
         // changeBase.end = change.rangeOffset + change.rangeLength;
         // changeBase.data = 
     });
-
-    
-
-    console.log(changes, unappliedChanges);
 
     const advancedClone = structuredClone(unappliedChanges.map(v => v.changes).flat());
     for(let i = 1; i < advancedClone.length; i++) {

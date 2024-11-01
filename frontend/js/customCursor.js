@@ -36,7 +36,7 @@ export const createCustomCursor = (editor, {user, selections}) => {
         }
 
         return selections.map(({positionLineNumber: line, positionColumn: column}) => {
-            const widgetId = `label-widget-${line}-${column}`;
+            const widgetId = `label-widget-${line}-${column}-${user.userId}`;
             const widget = {
                 suppressMouseDown: false,
                 getId: () => widgetId,
@@ -67,6 +67,7 @@ export const createCustomCursor = (editor, {user, selections}) => {
         decorations.clear();
         cursors.clear();
         widgets.forEach(widget => editor.removeContentWidget(widget))
+        delete user.clearCursor;
     }
 
     // editor1.removeContentWidget(t);
