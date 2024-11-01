@@ -429,8 +429,8 @@ join.addEventListener("click", async e => {
 });
 
 function socketJoin(key) {
-    socket.on(`caretUpdate${key}`, caretUpdate2);
-    function caretUpdate2(selectionPackage) {
+    socket.on(`caretUpdate${key}`, caretUpdate);
+    function caretUpdate(selectionPackage) {
         const curIndex = files[key][selectionPackage.filename].data.cells.findIndex(row => row.merge_id === selectionPackage.cel);
         const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
 
@@ -469,51 +469,6 @@ function socketJoin(key) {
         
         if (selectionPackage.selections) createCustomCursor(editor, {...selectionPackage, user: allRoomUsers[selectionPackage.userId]});
         else allRoomUsers[selectionPackage.userId]?.clearCursor?.();
-    }
-
-    // TODO: Remove
-    function caretUpdate(caret) {
-        const oldCaret = allRoomUsers[caret.userId];
-        if (oldCaret) allRoomUsers[caret.userId] = {...oldCaret, ...caret};
-        else {
-            caret.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
-            allRoomUsers[caret.userId] = caret;
-        }
-        
-        users.textContent = "";
-        for(const user of Object.values(allRoomUsers)) {
-            const div = document.createElement("div");
-            div.classList.toggle("inactive", user.cel === -1);
-            if (user.username) div.textContent = user.username;
-            else div.textContent = user.userId.substring(0, 3);
-            div.style.background = user.color;
-            div.addEventListener("click", () => {
-                const fileData = files[user.key][user.filename];
-                if (!fileData) return;
-                if (currentFileName !== user.filename) displayFileData(fileData);
-                if (user.cel !== -1) {
-                    const index = fileData.data.cells.findIndex(cell => cell.merge_id === user.cel);
-                    document.querySelectorAll(".cell")[index]?.scrollIntoView();
-                }
-            })
-            users.append(div);
-        }
-
-
-
-        const oldIndex = oldCaret == null ? -1 : files[key][caret.filename].data.cells.findIndex(row => row.merge_id === oldCaret.cel);
-        const curIndex = files[key][caret.filename].data.cells.findIndex(row => row.merge_id === caret.cel);
-        if (currentFileName !== caret.filename) return;
-        
-        if (oldIndex !== -1 && oldIndex !== curIndex) {
-            const text = files[oldCaret.key][oldCaret.filename].data.cells[oldIndex].source;
-            updateUserCaretElement(oldCaret, text, oldIndex);
-        }
-
-        if (curIndex === -1) return;
-
-        const text = files[key][caret.filename].data.cells[curIndex].source;
-        updateUserCaretElement(caret, text, curIndex);
     }
 
     socket.on(`cellChange${key}`, change => {
@@ -578,10 +533,10 @@ function socketJoin(key) {
         const fileData = files[changePackage.key][changePackage.filename];
         const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === changePackage.cel);
         const cell = fileData.data.cells[cellIndex];
+        const fileUsers = getFileUsers(changePackage);
         let needToUpdateSelection = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
         if(unappliedChanges.length) {
             const removeUserId = (key, val) => key === "userId" ? undefined : val;
-            // console.log(JSON.stringify(changePackage, removeUserId), JSON.stringify(unappliedChanges[0]));
             if (JSON.stringify(changePackage, removeUserId) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
                 needToUpdateSelection = false;
@@ -591,6 +546,8 @@ function socketJoin(key) {
         const selections = cell.editor ?
             preprocessSelection(cell.editor, cell.editor.getSelections())
             : [];
+
+        fileUsers.forEach(user => user.clearCursor?.());
 
         if (cell.editor) changeEditorText(
             cell.editor,
@@ -610,9 +567,8 @@ function socketJoin(key) {
             }));
         }
 
-        if (cell.editor) updateUserCarets2(cell.editor, changePackage);
+        if (cell.editor) updateUserCarets(cell.editor, fileUsers, changePackage);
 
-        
         for (let i = 0; i < unappliedChanges.length; i++) {
             for (const change of changePackage.changes) {
                 for(let j = 0; j < unappliedChanges[i].changes.length; j++) {
@@ -621,8 +577,6 @@ function socketJoin(key) {
             }
             unappliedChanges[i].id++;
         }
-
-
 
         for (const change of changePackage.changes) {
             cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);
@@ -640,26 +594,23 @@ function socketJoin(key) {
                 lineNumber: selection.endLineNumber, 
                 column: selection.endColumn
             });
-
-            console.log(selection.start, selection.end, selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn)
         }
 
         return selections;
     }
 
-    function preprocessedUserSelections(editor, changePackage) {
-        const usersAndSelections = [];
-
+    function getFileUsers(changePackage) {
+        const fileUsers = [];
         for (const user of Object.values(allRoomUsers)) {
             if (user.cel !== changePackage.cel) continue;
             if (user.key !== changePackage.key) continue;
             if (user.filename !== changePackage.filename) continue;
             if (!user.selections) continue;
 
-            usersAndSelections.push([user, preprocessSelection(editor, user.selections)]);
+            fileUsers.push(user);
         }
 
-        return usersAndSelections;
+        return fileUsers;
     }
 
     function getUpdatedSelectionByChanges(editor, changes, selection) {
@@ -670,7 +621,7 @@ function socketJoin(key) {
         for (const change of changes) {
             const delta = change.data.length - (change.end - change.start);
 
-            if (selection.end <= change.start) continue;
+            if (selection.end <= change.start && selection.end - selection.start > 0) continue;
             else if (change.end <= selection.start) {
                 selection.start += delta;
                 selection.end += delta;
@@ -708,116 +659,18 @@ function socketJoin(key) {
         }
     }
 
-    function updateUserCarets2(editor, changePackage) {
-        for (const user of Object.values(allRoomUsers)) {
-            if (user.cel !== changePackage.cel) continue;
-            if (user.key !== changePackage.key) continue;
-            if (user.filename !== changePackage.filename) continue;
-            if (!user.selections) continue;
-
+    function updateUserCarets(editor, users, changePackage) {
+        for (const user of users) {
             user.selections = user.selections.map(selection => getUpdatedSelectionByChanges(
                 editor,
                 changePackage.changes,
                 selection
             ));
 
-            console.log(user.selections)
-
-            createCustomCursor(editor, {selections: user.selections, user});
+            createCustomCursor(editor, { selections: user.selections, user });
         }
-        // for (const [user, selections] of usersAndSelections) {
-        //     console.log("root", structuredClone(selections))
-
-        //     console.log("change", structuredClone(user.selections));
-
-        // }
-    }
-    
-
-    function updateUserCarets(change) {
-        const delta = change.data.length - (change.end - change.start);
-        for(const caret of Object.values(allRoomUsers)) {
-            if (caret.cel !== change.cel || caret.key !== change.key || caret.filename !== change.filename) continue;
-
-            if (change.end <= caret.selectionStart) caret.selectionStart += delta;
-            if (change.end <= caret.selectionEnd) caret.selectionEnd += delta;
-        }
-    }
-
-    function updateCaret2(changePackage, selections, editor) {
-        // const textarea = document.querySelectorAll("textarea")[index];
-        for(const change of changePackage.changes) {
-            for(const selection of selections) {
-                const delta = change.data.length - (change.end - change.start);
-                if (change.end <= start) textarea.selectionStart = start + delta;
-                if (change.end <= end) textarea.selectionEnd = end + delta;
-                textarea.selectionDirection = dir;
-        
-                selectionStart = textarea.selectionStart;
-                selectionEnd = textarea.selectionEnd;
-                selectionDirection = textarea.selectionDirection;
-            }
-        }
-    }
-
-    function updateCaret(change, start, end, dir, index) {
-        const textarea = document.querySelectorAll("textarea")[index];
-        const delta = change.data.length - (change.end - change.start);
-        if (change.end <= start) textarea.selectionStart = start + delta;
-        if (change.end <= end) textarea.selectionEnd = end + delta;
-        textarea.selectionDirection = dir;
-
-        selectionStart = textarea.selectionStart;
-        selectionEnd = textarea.selectionEnd;
-        selectionDirection = textarea.selectionDirection;
     }
 }
-
-function updateUserCaretElement(caret, text, cellIndex) {
-    const caretPre = document.querySelectorAll(".cell .userCarets")[cellIndex];
-    caretPre.textContent = "";
-    const allCellUsers = Object.values(allRoomUsers).filter(user => user.cel === caret.cel)
-        .map(user => ({
-            ...user, 
-            min: Math.min(user.selectionStart, user.selectionEnd), 
-            max: Math.max(user.selectionStart, user.selectionEnd),
-        }));
-    if(allCellUsers.length === 0) return;
-    const bitArray = Array(text.length).fill(0);
-    allCellUsers.forEach((user, i) => {
-        const mask = 1<<parseInt(i);
-        if (user.min == user.max) bitArray[user.min] |= mask;
-        for(let j = user.min; j < user.max; j++) {
-            bitArray[j] |= mask;
-        }
-    });
-
-    let start = 0;
-    for(let i = 0; i <= bitArray.length; i++) {
-        if (bitArray[i] === bitArray[i + 1] && i !== bitArray.length) continue;
-
-        let curSpan = caretPre;
-        allCellUsers.forEach((caret, j) => {
-            const mask = 1<<parseInt(j);
-            if ((bitArray[i] & mask) !== mask) return;
-            const span = document.createElement("span");
-            span.style.setProperty("--bg", caret.color);
-            curSpan.append(span);
-            curSpan = span;
-            if (caret.min === caret.max) {
-                span.classList.add("backward", "noFill");
-            } else if(i + 1 === caret.max && caret.selectionDirection == "forward") {
-                span.classList.add("forward");
-            } else if(start === caret.min && caret.selectionDirection == "backward") {
-                span.classList.add("backward");
-            }
-        });
-
-        curSpan.append(document.createTextNode(text.substring(start, i + 1)));
-        start = i + 1;
-    }
-}
-
 
 function initLocalFileInfos(key, files) {
     for(const file of Object.values(files)) {
@@ -1001,10 +854,7 @@ function displayFileData(fileData) {
             editor.onDidChangeCursorSelection(selection => {
                 console.info("onDidChangeCursorSelection", selection.reason);
                 if (selection.reason === 1) return
-                // TODO: this is for debugging
-                if (selection.reason === 0) return
 
-                // socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
                 const selections = editor.getSelections();
 
                 socket.emit("caretUpdate", {
@@ -1045,7 +895,6 @@ function displayFileData(fileData) {
             })
 
             cell.editor = editor;
-            // editorContainer.style.width = null;
         }
 
         updateOutputFromCellElem(cellContainer, cell);
