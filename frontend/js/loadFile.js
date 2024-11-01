@@ -430,12 +430,19 @@ join.addEventListener("click", async e => {
 
 function socketJoin(key) {
     socket.on(`caretUpdate${key}`, caretUpdate2);
-    function caretUpdate2(carets) {
-        const oldCarets = allRoomUsers[carets.userId];
-        if (oldCarets) allRoomUsers[carets.userId] = {...oldCarets, ...carets};
+    function caretUpdate2(selectionPackage) {
+        const curIndex = files[key][selectionPackage.filename].data.cells.findIndex(row => row.merge_id === selectionPackage.cel);
+        const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
+
+        if(editor) {
+            selectionPackage.selections &&= preprocessSelection(editor, selectionPackage.selections);
+        }
+
+        const oldCarets = allRoomUsers[selectionPackage.userId];
+        if (oldCarets) allRoomUsers[selectionPackage.userId] = {...oldCarets, ...selectionPackage};
         else {
-            carets.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
-            allRoomUsers[carets.userId] = carets;
+            selectionPackage.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
+            allRoomUsers[selectionPackage.userId] = selectionPackage;
         }
         
         users.textContent = "";
@@ -457,14 +464,11 @@ function socketJoin(key) {
             users.append(div);
         }
 
-        const curIndex = files[key][carets.filename].data.cells.findIndex(row => row.merge_id === carets.cel);
-        if (curIndex === -1) return allRoomUsers[carets.userId]?.clearCursor?.();
-        if (currentFileName !== carets.filename) return;
+        if (curIndex === -1) return allRoomUsers[selectionPackage.userId]?.clearCursor?.();
+        if (currentFileName !== selectionPackage.filename) return;
         
-        const editor = files[key][carets.filename].data.cells[curIndex].editor;
-        console.assert(allRoomUsers[carets.userId].clearCursor, "WTF???")
-        if (carets.selections) createCustomCursor(editor, {...carets, user: allRoomUsers[carets.userId]});
-        else allRoomUsers[carets.userId]?.clearCursor?.();
+        if (selectionPackage.selections) createCustomCursor(editor, {...selectionPackage, user: allRoomUsers[selectionPackage.userId]});
+        else allRoomUsers[selectionPackage.userId]?.clearCursor?.();
     }
 
     // TODO: Remove
@@ -601,25 +605,13 @@ function socketJoin(key) {
         }
 
         if (needToUpdateSelection) {
-            // caretUpdate({
-            //     ...change,
-            //     selectionDirection: "forward",
-            //     selectionEnd: change.start,
-            //     selectionStart: change.start,
-            // });
-
             cell.editor.setSelections(selections.map(selection => {
-                return getUpdatedSelectionByChange(cell.editor, changePackage.changes, selection);
+                return getUpdatedSelectionByChanges(cell.editor, changePackage.changes, selection);
             }));
+        }
 
-        } 
+        if (cell.editor) updateUserCarets2(cell.editor, changePackage);
 
-        // const currentTextarea = document.querySelectorAll("textarea")[cellIndex];
-        // const start = currentTextarea?.selectionStart;
-        // const end = currentTextarea?.selectionEnd;
-        // const dir = currentTextarea?.selectionDirection;
-        // if (needToUpdateCaret) updateCaret2(changePackage, selections, cell.editor);
-        // if (currentFileName === changePackage.filename) updateUserCarets(change);
         
         for (let i = 0; i < unappliedChanges.length; i++) {
             for (const change of changePackage.changes) {
@@ -630,21 +622,12 @@ function socketJoin(key) {
             unappliedChanges[i].id++;
         }
 
-        // cell.source = cell.editor.getValue();
+
 
         for (const change of changePackage.changes) {
             cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);
         }
         cell.id++;
-        
-            // else {
-            //     console.log("User update?????")
-            //     // updateUserCaretElement(change, cell.source, cellIndex);
-            // }
-
-        // }
-
-
     });
 
     function preprocessSelection(editor, selections) {
@@ -657,12 +640,29 @@ function socketJoin(key) {
                 lineNumber: selection.endLineNumber, 
                 column: selection.endColumn
             });
+
+            console.log(selection.start, selection.end, selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn)
         }
 
         return selections;
     }
 
-    function getUpdatedSelectionByChange(editor, changes, selection) {
+    function preprocessedUserSelections(editor, changePackage) {
+        const usersAndSelections = [];
+
+        for (const user of Object.values(allRoomUsers)) {
+            if (user.cel !== changePackage.cel) continue;
+            if (user.key !== changePackage.key) continue;
+            if (user.filename !== changePackage.filename) continue;
+            if (!user.selections) continue;
+
+            usersAndSelections.push([user, preprocessSelection(editor, user.selections)]);
+        }
+
+        return usersAndSelections;
+    }
+
+    function getUpdatedSelectionByChanges(editor, changes, selection) {
         const isDirectionFlipped =
             selection.positionLineNumber <= selection.selectionStartLineNumber &&
             selection.positionColumn <= selection.selectionStartColumn;
@@ -694,7 +694,43 @@ function socketJoin(key) {
         const { lineNumber: positionLineNumber, column: positionColumn } =
             editor.getModel().getPositionAt(selection.end);
 
-        return { selectionStartLineNumber, selectionStartColumn, positionLineNumber, positionColumn }
+        return {
+            selectionStartLineNumber,
+            selectionStartColumn,
+            positionLineNumber,
+            positionColumn,
+            startLineNumber: Math.min(selectionStartLineNumber, positionLineNumber),
+            startColumn: Math.min(selectionStartColumn, positionColumn),
+            endLineNumber: Math.max(selectionStartLineNumber, positionLineNumber),
+            endColumn: Math.max(selectionStartColumn, positionColumn),
+            start: Math.min(selection.start, selection.end),
+            end: Math.max(selection.start, selection.end),
+        }
+    }
+
+    function updateUserCarets2(editor, changePackage) {
+        for (const user of Object.values(allRoomUsers)) {
+            if (user.cel !== changePackage.cel) continue;
+            if (user.key !== changePackage.key) continue;
+            if (user.filename !== changePackage.filename) continue;
+            if (!user.selections) continue;
+
+            user.selections = user.selections.map(selection => getUpdatedSelectionByChanges(
+                editor,
+                changePackage.changes,
+                selection
+            ));
+
+            console.log(user.selections)
+
+            createCustomCursor(editor, {selections: user.selections, user});
+        }
+        // for (const [user, selections] of usersAndSelections) {
+        //     console.log("root", structuredClone(selections))
+
+        //     console.log("change", structuredClone(user.selections));
+
+        // }
     }
     
 
@@ -965,6 +1001,8 @@ function displayFileData(fileData) {
             editor.onDidChangeCursorSelection(selection => {
                 console.info("onDidChangeCursorSelection", selection.reason);
                 if (selection.reason === 1) return
+                // TODO: this is for debugging
+                if (selection.reason === 0) return
 
                 // socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
                 const selections = editor.getSelections();

@@ -69,6 +69,4 @@ export const createCustomCursor = (editor, {user, selections}) => {
         widgets.forEach(widget => editor.removeContentWidget(widget))
         delete user.clearCursor;
     }
-
-    // editor1.removeContentWidget(t);
 }
