@@ -308,27 +308,27 @@ setInterval(async () => {
             let i = 0;
             let elementIndex = 0;
             main: while(i < localCells.length) {
-                if (localCells[i]?.merge_id == null) continue;
+                if (localCells[i]?.id == null) continue;
                 for(let j = 0; j < fileCells.length; j++) {
-                    if (localCells[i]?.merge_id === fileCells[j]?.merge_id) {
+                    if (localCells[i]?.id === fileCells[j]?.id) {
                         localCells[i].metadata = fileCells[j].metadata;
                         // localCells[i].cell_type = fileCells[j].cell_type;
                         localCells[i].outputs = fileCells[j].outputs;
                         localCells[i].execution_count = fileCells[j].execution_count;
 
-                        const elementIndex = fileData.data.cells.findIndex(cell => cell.merge_id === localCells[i]?.merge_id);
-                        const cellElem = document.querySelectorAll(".cell")[elementIndex];
+                        const elementIndex = fileData.data.cells.findIndex(cell => cell.id === localCells[i]?.id);
+                        const cellElem = document.querySelectorAll(".notebook-cell")[elementIndex];
+
                         updateOutputFromCellElem(cellElem, fileCells[j]);
 
-                        console.log(fileCells[j].last_id)
-
-                        if (fileCells[j].last_id === localCells[i].id) {
+                        // TODO: last_id is no longer set, add modified_since_last_save to file data
+                        if (fileCells[j].last_id === localCells[i].custom_modifications) {
                             if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
     
                             changeInsideCell(
                                 fileData.key,
                                 fileData.name,
-                                localCells[i].merge_id,
+                                localCells[i].id,
                                 localCells[i].source,
                                 fileCells[j].source
                             )
@@ -431,7 +431,7 @@ join.addEventListener("click", async e => {
 function socketJoin(key) {
     socket.on(`caretUpdate${key}`, caretUpdate);
     function caretUpdate(selectionPackage) {
-        const curIndex = files[key][selectionPackage.filename].data.cells.findIndex(row => row.merge_id === selectionPackage.cel);
+        const curIndex = files[key][selectionPackage.filename].data.cells.findIndex(row => row.id === selectionPackage.cel);
         const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
 
         if(editor) {
@@ -457,7 +457,7 @@ function socketJoin(key) {
                 if (!fileData) return;
                 if (currentFileName !== user.filename) displayFileData(fileData);
                 if (user.cel !== -1) {
-                    const index = fileData.data.cells.findIndex(cell => cell.merge_id === user.cel);
+                    const index = fileData.data.cells.findIndex(cell => cell.id === user.cel);
                     document.querySelectorAll(".cell")[index]?.scrollIntoView();
                 }
             })
@@ -481,7 +481,7 @@ function socketJoin(key) {
         }
 
         const fileData = files[change.key][change.filename];
-        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+        const cellIndex = fileData.data.cells.findIndex(v => v.id === change.cel);
 
         if (change.type === "delete") {
             fileData.data.cells.splice(cellIndex, 1);
@@ -531,7 +531,7 @@ function socketJoin(key) {
     socket.on(`fileUpdates${key}`, changePackage => {
         const unappliedChanges = allUnappliedChanges[key + changePackage.filename][changePackage.cel].unappliedChanges;
         const fileData = files[changePackage.key][changePackage.filename];
-        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === changePackage.cel);
+        const cellIndex = fileData.data.cells.findIndex(v => v.id === changePackage.cel);
         const cell = fileData.data.cells[cellIndex];
         const fileUsers = getFileUsers(changePackage);
         let needToUpdateSelection = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
@@ -575,13 +575,13 @@ function socketJoin(key) {
                     unappliedChanges[i].changes[j] = advanceChangeForward(change, unappliedChanges[i].changes[j]);
                 }
             }
-            unappliedChanges[i].id++;
+            unappliedChanges[i].custom_modifications++;
         }
 
         for (const change of changePackage.changes) {
             cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);
         }
-        cell.id++;
+        cell.custom_modifications++;
     });
 
     function preprocessSelection(editor, selections) {
@@ -678,7 +678,7 @@ function initLocalFileInfos(key, files) {
         const cells = allUnappliedChanges[key + file.name];
         cells.unappliedFileChanges ??= [];
         for(const cell of file.data.cells) {
-            cells[cell.merge_id] ??= {unappliedChanges: []};
+            cells[cell.id] ??= {unappliedChanges: []};
         }
     }
 }
@@ -733,8 +733,8 @@ async function createFile(file, parentUl, fileNames, path) {
     let i = 0;
     for(const cell of jsonData.cells) {
         if (Array.isArray(cell.source)) cell.source = cell.source.join("");
-        cell.id = 0;
-        cell.merge_id = i++;
+        cell.custom_modifications = 0;
+        cell.id ??= i++;
     }
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
@@ -767,7 +767,7 @@ function displayFileData(fileData) {
         typeSelection.addEventListener("change", () => {
             socket.emit("cellChange", {
                 type: "changeType",
-                cel: cell.merge_id,
+                cel: cell.id,
                 filename: fileData.name,
                 key: fileData.key,
                 newType: typeSelection.value
@@ -788,23 +788,23 @@ function displayFileData(fileData) {
         const upButton = document.createElement("button");
         upButton.textContent = "Up";
         upButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "moveUp", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+            socket.emit("cellChange", {type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key});
         });
         const downButton = document.createElement("button");
         downButton.textContent = "Down";
         downButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "moveDown", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+            socket.emit("cellChange", {type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key});
         });
 
         const addButton = document.createElement("button");
         addButton.textContent = "Add";
         addButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "add", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+            socket.emit("cellChange", {type: "add", cel: cell.id, filename: fileData.name, key: fileData.key});
         });
         const deleteButton = document.createElement("button");
         deleteButton.textContent = "Delete";
         deleteButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "delete", cel: cell.merge_id, filename: fileData.name, key: fileData.key});
+            socket.emit("cellChange", {type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key});
         });
         buttonContainer.append(upButton, downButton, addButton, deleteButton);
 
@@ -848,18 +848,22 @@ function displayFileData(fileData) {
 
                 if(changes.isFlush) return;
 
-                changeInsideCell2(fileData.key, fileData.name, cell.merge_id, changes)
+                changeInsideCell2(fileData.key, fileData.name, cell.id, changes)
             });
 
             editor.onDidChangeCursorSelection(selection => {
                 console.info("onDidChangeCursorSelection", selection.reason);
+                
+                // const cursorElement = editorContainer.querySelector(".cursor-primary") || editorContainer.querySelector(".cursor");
+                // cursorElement?.scrollIntoViewIfNeeded();
+
                 if (selection.reason === 1) return
 
                 const selections = editor.getSelections();
 
                 socket.emit("caretUpdate", {
                     selections,
-                    cel: cell.merge_id,
+                    cel: cell.id,
                     key: fileData.key,
                     filename: fileData.name,
                     username: username.value
@@ -867,7 +871,7 @@ function displayFileData(fileData) {
             });
 
             editor.onDidFocusEditorText(() => {
-                currentCelId = cell.merge_id;
+                currentCelId = cell.id;
             });
 
             editor.onDidBlurEditorText(() => {
@@ -907,8 +911,8 @@ function displayFileData(fileData) {
         // // setTimeout(() => updateTextAreaHeight(textArea), 100);
         // // updateTextAreaHeight(textArea);
 
-        // if(users.find(u => u.cel === cell.merge_id)) {
-        //     updateUserCaretElement({cel: cell.merge_id}, cell.source, i);
+        // if(users.find(u => u.cel === cell.id)) {
+        //     updateUserCaretElement({cel: cell.id}, cell.source, i);
         // }
     }
 
@@ -922,7 +926,7 @@ function createCellElement(fileData, cellData) {
     typeSelection.addEventListener("change", () => {
         socket.emit("cellChange", {
             type: "changeType",
-            cel: cellData.merge_id,
+            cel: cellData.id,
             filename: fileData.name,
             key: fileData.key,
             newType: typeSelection.value
@@ -943,23 +947,23 @@ function createCellElement(fileData, cellData) {
     const upButton = document.createElement("button");
     upButton.textContent = "Up";
     upButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveUp", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "moveUp", cel: cellData.id, filename: fileData.name, key: fileData.key});
     });
     const downButton = document.createElement("button");
     downButton.textContent = "Down";
     downButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveDown", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "moveDown", cel: cellData.id, filename: fileData.name, key: fileData.key});
     });
 
     const addButton = document.createElement("button");
     addButton.textContent = "Add";
     addButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "add", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "add", cel: cellData.id, filename: fileData.name, key: fileData.key});
     });
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "Delete";
     deleteButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "delete", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "delete", cel: cellData.id, filename: fileData.name, key: fileData.key});
     });
     buttonContainer.append(upButton, downButton, addButton, deleteButton);
 
@@ -1000,7 +1004,7 @@ function createCellElement(fileData, cellData) {
     cellData.editor = editor;
     const pre = document.createElement("pre");
     pre.classList.add("userCarets");
-    const textarea = createTextArea(cellData.merge_id, fileData);
+    const textarea = createTextArea(cellData.id, fileData);
     textarea.value = cellData.source;
     // editorContainer.append(pre, textarea);
     
@@ -1010,7 +1014,7 @@ function createCellElement(fileData, cellData) {
         textBeforeInput = textarea.value;
     })
     textarea.addEventListener("input", _ => {
-        changeInsideCell(fileData.key, fileData.name, cellData.merge_id, textBeforeInput, textarea.value)
+        changeInsideCell(fileData.key, fileData.name, cellData.id, textBeforeInput, textarea.value)
         updateTextAreaHeight(textarea);
         updateCodeHighlight(cellContainer);
     })
@@ -1179,15 +1183,19 @@ async function writeJsonDataToUserFile(fileData) {
 
 
 
-    const clone = structuredClone(fileData.data);
-    for(const cell of clone.cells) {
-        cell.source = cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n");
-        if (cell.source.length <= 1) cell.source = cell.source.join("");
-        cell.last_id = cell.id;
-        delete cell.id;
-    }
+    console.log(fileData.data);
+    const clone = {
+        ...fileData.data,
+        cells: fileData.data.cells.map(({ custom_modifications, editor, ...cell }) => {
+            return {
+                ...cell,
+                source: cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n")
+            };
+        })
+    };
+
     const stream = await fileData.handler.createWritable();
-    await stream.write(JSON.stringify(clone, null, 2));
+    await stream.write(JSON.stringify(clone, null, 1));
     const file = await fileData.handler.getFile();
     fileData.lastModified = file.lastModified;
     await stream.close();
@@ -1217,8 +1225,8 @@ function parseFileChanges(fileData) {
 function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     if (beforeEditText === editedText) return;
 
-    const cell = files[key][filename].data.cells.find(v => v.merge_id === cellId);
-    const change = {key, cel: cellId, filename, id: cell.id};
+    const cell = files[key][filename].data.cells.find(v => v.id === cellId);
+    const change = {key, cel: cellId, filename, custom_modifications: cell.custom_modifications};
     const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
 
     let firstUnchangedChar = -1;
@@ -1261,7 +1269,7 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     // console.log(JSON.stringify(change, (key, val) => {
     //     if (key === "filename") return undefined;
     //     if (key === "cel") return undefined;
-    //     if (key === "id") return undefined;
+    //     if (key === "custom_modifications") return undefined;
     //     if (key === "key") return undefined;
     //     return val;
     // }));
@@ -1289,7 +1297,7 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
 }
 
 function changeInsideCell2(key, filename, cellId, vscodeChanges) {
-    const cell = files[key][filename].data.cells.find(v => v.merge_id === cellId);
+    const cell = files[key][filename].data.cells.find(v => v.id === cellId);
     const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
 
    
@@ -1325,7 +1333,7 @@ function changeInsideCell2(key, filename, cellId, vscodeChanges) {
         }
     }
 
-    const changePackage = {key, cel: cellId, filename, id: cell.id, changes: revertedChanges};
+    const changePackage = {key, cel: cellId, filename, custom_modifications: cell.custom_modifications, changes: revertedChanges};
 
     unappliedChanges.push(changePackage);
     
@@ -1444,7 +1452,7 @@ function changeEditorText(editor, source, rootChangesPackages) {
     for(const change of advancedClone) {
         // if(newText === null) {
         //     const fileData = files[change.key][change.filename];
-        //     cellNum = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+        //     cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
         //     newText = fileData.data.cells[cellNum].source;
         // }
         source = source.substring(0, change.start) + change.data + source.substring(change.end);
@@ -1482,7 +1490,7 @@ function changeTextarea(rootChanges) {
         if (currentFileName !== change.filename) return;
         if(newText === null) {
             const fileData = files[change.key][change.filename];
-            cellNum = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+            cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
             newText = fileData.data.cells[cellNum].source;
         }
         newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);

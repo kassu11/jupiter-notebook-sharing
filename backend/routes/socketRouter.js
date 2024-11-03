@@ -35,19 +35,19 @@ const socketConnection = (socket) => {
 		try {
 			const socketKey = `cellChange${change.key}`
 			const fileData = hostedFiles[change.key][change.filename];
-            const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+            const cellIndex = fileData.data.cells.findIndex(v => v.id === change.cel);
             if (cellIndex === -1) throw new Error("Invalid cell ID");
 
             if (change.type === "delete") {
                 fileData.data.cells.splice(cellIndex, 1);
                 socketIO.emit(socketKey, change);
             } else if(change.type === "add") {
-                const newCellId = fileData.data.cells.reduce((acc, cell) => Math.max( cell.merge_id, acc ), 1) + 1;
+                const newCellId = fileData.data.cells.reduce((acc, cell) => Math.max( cell.id, acc ), 1) + 1;
                 const newCell = {
                     source: "",
                     cell_type: "code",
-                    merge_id: newCellId,
-                    id: 0,
+                    id: newCellId,
+                    custom_modifications: 0,
                 };
                 fileData.data.cells.splice(cellIndex + 1, 0, newCell);
                 socketIO.emit(socketKey, {...change, data : newCell});
@@ -73,29 +73,29 @@ const socketConnection = (socket) => {
         try {
             const socketKey = `fileUpdates${changePackage.key}`
             const fileData = hostedFiles[changePackage.key][changePackage.filename];
-            const cell = fileData.data.cells.find(v => v.merge_id === changePackage.cel);
+            const cell = fileData.data.cells.find(v => v.id === changePackage.cel);
             const changeFilo = fileData.changes;
 
-            if (changePackage.id > cell.id) throw new Error("id is too large");
+            if (changePackage.custom_modifications > cell.custom_modifications) throw new Error("custom_modifications is too large");
             
-            if (cell.id !== changePackage.id) {
-                console.log("Wrong id");
+            if (cell.custom_modifications !== changePackage.custom_modifications) {
+                console.log("Wrong custom_modifications");
                 for (const oldChangePackage of changeFilo.iterator()) {
-                    if (oldChangePackage.id < changePackage.id) continue;
+                    if (oldChangePackage.custom_modifications < changePackage.custom_modifications) continue;
                     if (oldChangePackage.cel != changePackage.cel) continue;
-                    if (oldChangePackage.id > changePackage.id) throw new Error("Invalid id");
+                    if (oldChangePackage.custom_modifications > changePackage.custom_modifications) throw new Error("Invalid custom_modifications");
                     
                     for (const oldChange of oldChangePackage.changes) {
                         for(let i = 0; i < changePackage.changes.length; i++) {
                             changePackage.changes[i] = advanceChangeForward(oldChange, changePackage.changes[i]);
                         }
                     }
-                    changePackage.id++;
+                    changePackage.custom_modifications++;
 
                     console.log("old: ", oldChangePackage);
                 }
 
-                if (changePackage.id !== cell.id) throw new Error("Too old id");
+                if (changePackage.custom_modifications !== cell.custom_modifications) throw new Error("Too old custom_modifications");
             }
 
             const advancedClone = structuredClone(changePackage.changes);
@@ -108,7 +108,7 @@ const socketConnection = (socket) => {
             for(const change of advancedClone) {
                 cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);;
             }
-            cell.id++;
+            cell.custom_modifications++;
             changeFilo.push({...changePackage, changes: advancedClone});
 
             socketIO.emit(socketKey, { ...changePackage, userId: socket.id });
