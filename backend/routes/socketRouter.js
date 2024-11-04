@@ -42,11 +42,13 @@ const socketConnection = (socket) => {
                 fileData.data.cells.splice(cellIndex, 1);
                 socketIO.emit(socketKey, change);
             } else if(change.type === "add") {
-                const newCellId = fileData.data.cells.reduce((acc, cell) => Math.max( cell.id, acc ), 1) + 1;
                 const newCell = {
-                    source: "",
                     cell_type: "code",
-                    id: newCellId,
+                    execution_count: null,
+                    id: generateRandomId(),
+                    metadata: {},
+                    outputs: [],
+                    source: "",
                     custom_modifications: 0,
                 };
                 fileData.data.cells.splice(cellIndex + 1, 0, newCell);
@@ -119,6 +121,19 @@ const socketConnection = (socket) => {
 	});
 
 };
+
+function generateRandomId() {
+    const chars = "0123456789abcdefghijklmnopqrstuvxyz";
+    return `${randomString(chars, 8)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 12)}`;
+}
+
+function randomString(chars, length) {
+    return Array.from({length}, () => randomCharFromString(chars)).join("");
+}
+
+function randomCharFromString(string) {
+    return string[Math.floor(Math.random() * string.length)];
+}
 
 
 function advanceChangeForward(oldChange, change) {

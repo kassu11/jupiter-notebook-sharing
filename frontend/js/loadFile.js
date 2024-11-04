@@ -340,6 +340,19 @@ setInterval(async () => {
     }
 }, 100);
 
+function generateRandomId() {
+    const chars = "0123456789abcdefghijklmnopqrstuvxyz";
+    return `${randomString(chars, 8)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 12)}`;
+}
+
+function randomString(chars, length) {
+    return Array.from({length}, () => randomCharFromString(chars)).join("");
+}
+
+function randomCharFromString(string) {
+    return string[Math.floor(Math.random() * string.length)];
+}
+
 
 lag.addEventListener("click", async e => {
     socket.emit("lag", "data")
@@ -479,14 +492,13 @@ function socketJoin(key) {
                 document.querySelectorAll(".notebook-cell")[cellIndex].remove();
             }
         } else if (change.type === "add") {
-            if (fileActive) {
-                const cellContainer = createCellElement(fileData, change.data);
-                document.querySelectorAll(".notebook-cell")[cellIndex].after(cellContainer);
-                // updateTextAreaHeight(cellContainer.querySelector("textarea"));
-                
-            }
             fileData.data.cells.splice(cellIndex + 1, 0, change.data);
             initLocalFileInfos(key, [fileData]);
+            if (fileActive) {
+                console.log(change.data);
+                const parentElem = document.querySelectorAll(".notebook-cell")[cellIndex];
+                addCellElement(change.data, fileData, {type: "after", elem: parentElem});
+            }
         } else if (change.type === "moveUp") {
             if (fileActive) {
                 const nextCell = document.querySelectorAll(".notebook-cell")[cellIndex - 1];
@@ -720,11 +732,10 @@ async function createFile(file, parentUl, fileNames, path) {
     const fileHandler = await file.getFile();
     const fileData = await fileHandler.text();
     const jsonData = JSON.parse(fileData);
-    let i = 0;
     for(const cell of jsonData.cells) {
         if (Array.isArray(cell.source)) cell.source = cell.source.join("");
         cell.custom_modifications = 0;
-        cell.id ??= i++;
+        cell.id ??= generateRandomId();
     }
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
@@ -745,184 +756,27 @@ function displayFileData(fileData) {
     currentKey = fileData.key;
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
-    for (let i = 0; i < fileData.data.cells.length; i++) {
-        const cell = fileData.data.cells[i];
-
-
-        const cellContainer = document.createElement("div");
-        cellContainer.classList.add("notebook-cell");
-
-
-        const typeSelection = document.createElement("select");
-        typeSelection.addEventListener("change", () => {
-            socket.emit("cellChange", {
-                type: "changeType",
-                cel: cell.id,
-                filename: fileData.name,
-                key: fileData.key,
-                newType: typeSelection.value
-            });
-
-            changeEditorLanguage(cell.editor, typeSelection.value);
-        });
-
-        const markdownOption = document.createElement("option");
-        markdownOption.value = "markdown";
-        markdownOption.textContent = "Markdown";
-        const codeOption = document.createElement("option");
-        codeOption.value = "code";
-        codeOption.textContent = "Code";
-        typeSelection.append(markdownOption, codeOption);
-        typeSelection.value = cell.cell_type;
-
-        const buttonContainer = document.createElement("div");
-        buttonContainer.classList.add("button-container");
-        const upButton = document.createElement("button");
-        upButton.textContent = "Up";
-        upButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key});
-        });
-        const downButton = document.createElement("button");
-        downButton.textContent = "Down";
-        downButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key});
-        });
-
-        const addButton = document.createElement("button");
-        addButton.textContent = "Add";
-        addButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "add", cel: cell.id, filename: fileData.name, key: fileData.key});
-        });
-        const deleteButton = document.createElement("button");
-        deleteButton.textContent = "Delete";
-        deleteButton.addEventListener("click", () => {
-            socket.emit("cellChange", {type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key});
-        });
-        buttonContainer.append(upButton, downButton, addButton, deleteButton);
-
-        
-        
-        if (cell.editor) {
-            cellContainer.append(typeSelection, cell.editor.getContainerDomNode(), buttonContainer);
-            notebook.append(cellContainer);
-            resizeAllEditors();
-        } else {
-            const editorContainer = document.createElement("div");
-            editorContainer.classList.add("editor-container");
-            cellContainer.append(typeSelection, editorContainer, buttonContainer);
-            notebook.append(cellContainer);
-    
-            editorContainer.addEventListener("wheel", e => {
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-            }, {capture: true});
-
-            const editor = monaco.editor.create(editorContainer, {
-                value: cell.source,
-                language: cell.cell_type === "code" ? "python" : "markdown",
-                theme: "vs-dark",
-                scrollBeyondLastLine: false,
-                wordWrap: true,
-                minimap: {
-                    enabled: false
-                },
-                hover: {
-                    enabled: false
-                },
-                padding: {
-                    top: 10,
-                    bottom: 10
-                }
-            });
-
-            editor.onDidChangeModelContent(changes => {
-                console.info("onDidChangeModelContent");
-
-                if(changes.isFlush) return;
-
-                changeInsideCell2(fileData.key, fileData.name, cell.id, changes)
-            });
-
-            editor.onDidChangeCursorSelection(selection => {
-                console.info("onDidChangeCursorSelection", selection.reason);
-                
-                // const cursorElement = editorContainer.querySelector(".cursor-primary") || editorContainer.querySelector(".cursor");
-                // cursorElement?.scrollIntoViewIfNeeded();
-
-                if (selection.reason === 1) return
-
-                const selections = editor.getSelections();
-
-                socket.emit("caretUpdate", {
-                    selections,
-                    cel: cell.id,
-                    key: fileData.key,
-                    filename: fileData.name,
-                    username: username.value
-                });
-            });
-
-            editor.onDidFocusEditorText(() => {
-                currentCelId = cell.id;
-            });
-
-            editor.onDidBlurEditorText(() => {
-                // TODO: Enable this code when debugging is done
-                // editor.setSelection({
-                //     positionColumn: 0,
-                //     positionLineNumber: 0,
-                //     selectionStartColumn: 0,
-                //     selectionStartLineNumber: 0,
-                // });
-                // currentCelId = -1;
-                // socket.emit("caretUpdate", {
-                //     cel: -1,
-                //     key: fileData.key,
-                //     filename: fileData.name,
-                //     username: username.value
-                // });
-            });
-
-            editor.onDidContentSizeChange(() => {
-                editor.layout({
-                    width: editorContainer.clientWidth,
-                    height: editor.getContentHeight()
-                });
-            })
-
-            cell.editor = editor;
-        }
-
-        updateOutputFromCellElem(cellContainer, cell);
-        
-        editors.push(cell.editor);
- 
-        // const cellContainer = createCellElement(fileData, cell);
-        // notebook.append(cellContainer);
-        // // const textArea = cellContainer.querySelector("textarea")
-        // // setTimeout(() => updateTextAreaHeight(textArea), 100);
-        // // updateTextAreaHeight(textArea);
-
-        // if(users.find(u => u.cel === cell.id)) {
-        //     updateUserCaretElement({cel: cell.id}, cell.source, i);
-        // }
+    for (const cell of fileData.data.cells) {
+        addCellElement(cell, fileData);
     }
 
 }
 
-function createCellElement(fileData, cellData) {
+function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem: notebook}) {
     const cellContainer = document.createElement("div");
-    cellContainer.classList.add("cell");
+    cellContainer.classList.add("notebook-cell");
 
     const typeSelection = document.createElement("select");
     typeSelection.addEventListener("change", () => {
         socket.emit("cellChange", {
             type: "changeType",
-            cel: cellData.id,
+            cel: cell.id,
             filename: fileData.name,
             key: fileData.key,
             newType: typeSelection.value
         });
+
+        changeEditorLanguage(cell.editor, typeSelection.value);
     });
 
     const markdownOption = document.createElement("option");
@@ -932,90 +786,144 @@ function createCellElement(fileData, cellData) {
     codeOption.value = "code";
     codeOption.textContent = "Code";
     typeSelection.append(markdownOption, codeOption);
-    typeSelection.value = cellData.cell_type;
+    typeSelection.value = cell.cell_type;
 
     const buttonContainer = document.createElement("div");
-    buttonContainer.classList.add("buttonContainer");
+    buttonContainer.classList.add("button-container");
     const upButton = document.createElement("button");
     upButton.textContent = "Up";
     upButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveUp", cel: cellData.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
     const downButton = document.createElement("button");
     downButton.textContent = "Down";
     downButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveDown", cel: cellData.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
 
     const addButton = document.createElement("button");
     addButton.textContent = "Add";
     addButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "add", cel: cellData.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "add", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "Delete";
     deleteButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "delete", cel: cellData.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
     buttonContainer.append(upButton, downButton, addButton, deleteButton);
 
+    function addElementToDom(cellDomPosition, cellElement) {
+        if (cellDomPosition.type === "append") cellDomPosition.elem.append(cellElement);
+        if (cellDomPosition.type === "prepend") cellDomPosition.elem.prepend(cellElement);
+        if (cellDomPosition.type === "after") cellDomPosition.elem.after(cellElement);
+        if (cellDomPosition.type === "before") cellDomPosition.elem.before(cellElement);
+    }
+    
+    if (cell.editor) {
+        cellContainer.append(typeSelection, cell.editor.getContainerDomNode(), buttonContainer);
+        addElementToDom(cellDomPosition, cellContainer);
+        resizeAllEditors();
+    } else {
+        const editorContainer = document.createElement("div");
+        editorContainer.classList.add("editor-container");
+        cellContainer.append(typeSelection, editorContainer, buttonContainer);
+        addElementToDom(cellDomPosition, cellContainer);
 
-    const editorContainer = document.createElement("div");
-    editorContainer.addEventListener("wheel", e => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-    }, {capture: true});
-    editorContainer.classList.add("editorContainer"); // TODO: remove
-    const editor = monaco.editor.create(editorContainer, {
-        value: cellData.source,
-        language: cellData.cell_type === "code" ? "python" : cellData.cell_type,
-        theme: "vs-dark",        // Set the editor theme
-        scrollBeyondLastLine: false,
-        wordWrap: true,
-        minimap: {
-            enabled: false
-        },
-        hover: {
-            enabled: false
-        },
-        padding: {
-            top: 10,
-            bottom: 10
-        }
-    });
+        editorContainer.addEventListener("wheel", e => {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }, {capture: true});
 
-    editor.onDidChangeModelContent(event => {
-        editor.layout({
-            width: 700,
-            height: editor.getContentHeight()
+        const editor = monaco.editor.create(editorContainer, {
+            value: cell.source,
+            language: cell.cell_type === "code" ? "python" : "markdown",
+            theme: "vs-dark",
+            scrollBeyondLastLine: false,
+            wordWrap: true,
+            minimap: {
+                enabled: false
+            },
+            hover: {
+                enabled: false
+            },
+            padding: {
+                top: 10,
+                bottom: 10
+            }
         });
-    });
+
+        editor.onDidChangeModelContent(changes => {
+            console.info("onDidChangeModelContent");
+
+            if(changes.isFlush) return;
+
+            changeInsideCell2(fileData.key, fileData.name, cell.id, changes)
+        });
+
+        editor.onDidChangeCursorSelection(selection => {
+            console.info("onDidChangeCursorSelection", selection.reason);
+            
+            // const cursorElement = editorContainer.querySelector(".cursor-primary") || editorContainer.querySelector(".cursor");
+            // cursorElement?.scrollIntoViewIfNeeded();
+
+            if (selection.reason === 1) return
+
+            const selections = editor.getSelections();
+
+            socket.emit("caretUpdate", {
+                selections,
+                cel: cell.id,
+                key: fileData.key,
+                filename: fileData.name,
+                username: username.value
+            });
+        });
+
+        editor.onDidFocusEditorText(() => {
+            currentCelId = cell.id;
+        });
+
+        editor.onDidBlurEditorText(() => {
+            // TODO: Enable this code when debugging is done
+            // editor.setSelection({
+            //     positionColumn: 0,
+            //     positionLineNumber: 0,
+            //     selectionStartColumn: 0,
+            //     selectionStartLineNumber: 0,
+            // });
+            // currentCelId = -1;
+            // socket.emit("caretUpdate", {
+            //     cel: -1,
+            //     key: fileData.key,
+            //     filename: fileData.name,
+            //     username: username.value
+            // });
+        });
+
+        editor.onDidContentSizeChange(() => {
+            editor.layout({
+                width: editorContainer.clientWidth,
+                height: editor.getContentHeight()
+            });
+        })
+
+        cell.editor = editor;
+    }
+
+    updateOutputFromCellElem(cellContainer, cell);
     
+    editors.push(cell.editor);
 
-    // TODO: probably need to remove this when writing in file
-    cellData.editor = editor;
-    const pre = document.createElement("pre");
-    pre.classList.add("userCarets");
-    const textarea = createTextArea(cellData.id, fileData);
-    textarea.value = cellData.source;
-    // editorContainer.append(pre, textarea);
-    
+    // const cellContainer = createCellElement(fileData, cell);
+    // notebook.append(cellContainer);
+    // // const textArea = cellContainer.querySelector("textarea")
+    // // setTimeout(() => updateTextAreaHeight(textArea), 100);
+    // // updateTextAreaHeight(textArea);
 
-    let textBeforeInput = "";
-    textarea.addEventListener("beforeinput", _ => {
-        textBeforeInput = textarea.value;
-    })
-    textarea.addEventListener("input", _ => {
-        changeInsideCell(fileData.key, fileData.name, cellData.id, textBeforeInput, textarea.value)
-        updateTextAreaHeight(textarea);
-        updateCodeHighlight(cellContainer);
-    })
-
-    cellContainer.append(typeSelection, editorContainer, buttonContainer);
-    updateCodeHighlight(cellContainer);
-    updateOutputFromCellElem(cellContainer, cellData);
-
-    return cellContainer;
+    // if(users.find(u => u.cel === cell.id)) {
+    //     updateUserCaretElement({cel: cell.id}, cell.source, i);
+    // }
 }
 
 function updateOutputFromCellElem(cellElement, cellData) {
@@ -1160,11 +1068,6 @@ function jsonDataCopyForServer(filesData) {
     return clone;
 }
 
-
-/**
- * Returns json copy of a file without row id numbers.
- * Row id numbers are only used to sync the file with the server, end will break the file if keps
- */
 async function writeJsonDataToUserFile(fileData) {
     if(!fileData.handler) {
         fileData.handler = await showSaveFilePicker();
@@ -1173,18 +1076,21 @@ async function writeJsonDataToUserFile(fileData) {
         allFileHandlers.push(fileData);
     }
 
-
-
     console.log(fileData.data);
     const clone = {
         ...fileData.data,
         cells: fileData.data.cells.map(({ custom_modifications, editor, ...cell }) => {
             return {
                 ...cell,
-                source: cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n")
+                source: formatSource(cell.source)
             };
         })
     };
+
+    function formatSource(source) {
+        if (source.length === 0) return [];
+        return source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n")
+    }
 
     const stream = await fileData.handler.createWritable();
     await stream.write(JSON.stringify(clone, null, 1));
@@ -1192,27 +1098,6 @@ async function writeJsonDataToUserFile(fileData) {
     fileData.lastModified = file.lastModified;
     await stream.close();
 }
-
-/**
- * Test if file has changes.
- * If file has changes detect every changed row and send the changes to server which will update 
- * the local files variable.
- * This function also updates the outputs in each cell of the local files variable
- */
-function parseFileChanges(fileData) {
-    
-}
-
-// setInterval(() => {
-//     if(document.activeElement?.tagName === "TEXTAREA") {
-//         const text = document.activeElement.value;
-//         // console.log(files[123]["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"])
-//         if (!files[123]?.["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"].handler) {
-//             return;
-//         }
-//         changeInsideCell(123, "/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb", 0, text, text + "a")
-//     }
-// }, 100)
 
 function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     if (beforeEditText === editedText) return;
