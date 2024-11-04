@@ -1,0 +1,40 @@
+.user-color-1 {
+    --user-selection: hsla(240, 100%, 70%, 0.55);
+    --user-cursor: hsl(240, 100%, 70%);
+}
+
+.user-selection { background-color: var(--user-selection); }
+
+.fake-cursor {
+    border-left: 3px solid var(--user-cursor);
+    transform: translateX(-1px);
+    height: 100%;
+    // animation: blink 1s infinite linear;
+}
+
+.cursor-lable {
+    background-color: var(--user-cursor);
+    color: white;
+    padding: 0px 3px;
+    border-radius: 3px;
+    white-space: pre;
+    pointer-events: none;
+    font-size: 12px;
+    opacity: 0;
+
+    &.hovered {
+        opacity: 1;
+    }
+}
+
+
+
+@keyframes blink {
+    0%, 50% {
+        opacity: 0;
+    }
+
+    50.1% {
+        opacity: 1;
+    }
+}

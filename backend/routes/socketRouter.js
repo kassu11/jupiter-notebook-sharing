@@ -14,7 +14,7 @@ const socketConnection = (socket) => {
 
 	socket.on("lag", _ => {
 		const date = new Date();
-		const delay = date.setSeconds(date.getSeconds() + 4);
+		const delay = date.setSeconds(date.getSeconds() + 15);
 
 		while(new Date().getTime() < delay) {
 
@@ -35,19 +35,21 @@ const socketConnection = (socket) => {
 		try {
 			const socketKey = `cellChange${change.key}`
 			const fileData = hostedFiles[change.key][change.filename];
-            const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+            const cellIndex = fileData.data.cells.findIndex(v => v.id === change.cel);
             if (cellIndex === -1) throw new Error("Invalid cell ID");
 
             if (change.type === "delete") {
                 fileData.data.cells.splice(cellIndex, 1);
                 socketIO.emit(socketKey, change);
             } else if(change.type === "add") {
-                const newCellId = fileData.data.cells.reduce((acc, cell) => Math.max( cell.merge_id, acc ), 1) + 1;
                 const newCell = {
-                    source: "",
                     cell_type: "code",
-                    merge_id: newCellId,
-                    id: 0,
+                    execution_count: null,
+                    id: generateRandomId(),
+                    metadata: {},
+                    outputs: [],
+                    source: "",
+                    custom_modifications: 0,
                 };
                 fileData.data.cells.splice(cellIndex + 1, 0, newCell);
                 socketIO.emit(socketKey, {...change, data : newCell});
@@ -69,44 +71,69 @@ const socketConnection = (socket) => {
 		}
 	});
 
-	socket.on("changeFile", change => {
-		try {
-			const socketKey = `fileUpdates${change.key}`
-			const fileData = hostedFiles[change.key][change.filename];
-            const cell = fileData.data.cells.find(v => v.merge_id === change.cel);
-			const changeFilo = fileData.changes;
-	
-			if(cell.id !== change.id) {
-				console.log("Wrong id");
-				for(const oldChange of changeFilo.iterator()) {
-					if (oldChange.id < change.id) continue;
-					if (oldChange.cel != change.cel) continue;
-					if (oldChange.id > change.id) throw new Error("Invalid id");
+    socket.on("changeFile", changePackage => {
+        try {
+            const socketKey = `fileUpdates${changePackage.key}`
+            const fileData = hostedFiles[changePackage.key][changePackage.filename];
+            const cell = fileData.data.cells.find(v => v.id === changePackage.cel);
+            const changeFilo = fileData.changes;
 
-					change = advanceChangeForward(oldChange, change);
-					change.id++;
+            if (changePackage.custom_modifications > cell.custom_modifications) throw new Error("custom_modifications is too large");
+            
+            if (cell.custom_modifications !== changePackage.custom_modifications) {
+                console.log("Wrong custom_modifications");
+                for (const oldChangePackage of changeFilo.iterator()) {
+                    if (oldChangePackage.custom_modifications < changePackage.custom_modifications) continue;
+                    if (oldChangePackage.cel != changePackage.cel) continue;
+                    if (oldChangePackage.custom_modifications > changePackage.custom_modifications) throw new Error("Invalid custom_modifications");
+                    
+                    for (const oldChange of oldChangePackage.changes) {
+                        for(let i = 0; i < changePackage.changes.length; i++) {
+                            changePackage.changes[i] = advanceChangeForward(oldChange, changePackage.changes[i]);
+                        }
+                    }
+                    changePackage.custom_modifications++;
 
-					console.log("old: ", oldChange);
-				}
+                    console.log("old: ", oldChangePackage);
+                }
 
-				if (change.id !== cell.id) throw new Error("Too old id");
-			}
+                if (changePackage.custom_modifications !== cell.custom_modifications) throw new Error("Too old custom_modifications");
+            }
 
-			const sourceText = cell.source;
-			const newText = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
-			cell.source = newText;
-            cell.id++;
+            const advancedClone = structuredClone(changePackage.changes);
+            for(let i = 1; i < advancedClone.length; i++) {
+                for(let j = 0; j < i; j++) {
+                    advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+                }
+            }
+            
+            for(const change of advancedClone) {
+                cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);;
+            }
+            cell.custom_modifications++;
+            changeFilo.push({...changePackage, changes: advancedClone});
 
-			changeFilo.push(change);
-	
-			socketIO.emit(socketKey, {...change, userId: socket.id});
-			// socket.broadcast.emit(socketKey, change);
-		} catch (e) {
-			console.error(e)
-		}
+            socketIO.emit(socketKey, { ...changePackage, userId: socket.id });
+            // socket.broadcast.emit(socketKey, change);
+        } catch (e) {
+            console.error(e)
+        }
 	});
 
 };
+
+function generateRandomId() {
+    const chars = "0123456789abcdefghijklmnopqrstuvxyz";
+    return `${randomString(chars, 8)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 12)}`;
+}
+
+function randomString(chars, length) {
+    return Array.from({length}, () => randomCharFromString(chars)).join("");
+}
+
+function randomCharFromString(string) {
+    return string[Math.floor(Math.random() * string.length)];
+}
 
 
 function advanceChangeForward(oldChange, change) {

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "monaco-editor": "^0.52.0",
     "socket-io": "^1.0.0",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",
