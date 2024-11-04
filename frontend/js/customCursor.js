@@ -1,4 +1,5 @@
 import * as monaco from 'monaco-editor';
+const notebook = document.querySelector("#notebook");
 
 window.addEventListener("mousemove", ({x, y}) => {
     const userLabels = document.querySelectorAll(".cursor-lable");
@@ -83,5 +84,19 @@ export const createCustomCursor = (editor, { user, selections }) => {
         cursors.clear();
         widgets.forEach(widget => widget && editor.removeContentWidget(widget))
         delete user.clearCursor;
+        delete user.scrollToCursor;
+    }
+
+    user.scrollToCursor = () => {
+        for (const widget of widgets) {
+            if (!widget) continue;
+
+            const widgetElem = document.querySelector(`[widgetid="${widget.getId()}"]`);
+            const { top } = widgetElem.getBoundingClientRect();
+            const height = notebook.clientHeight;
+
+            notebook.scrollBy(0, top - height / 2)
+            return;
+        }
     }
 }

@@ -458,10 +458,7 @@ function socketJoin(key) {
                 const fileData = files[user.key][user.filename];
                 if (!fileData) return;
                 if (currentFileName !== user.filename) displayFileData(fileData);
-                if (user.cel !== -1) {
-                    const index = fileData.data.cells.findIndex(cell => cell.id === user.cel);
-                    document.querySelectorAll(".cell")[index]?.scrollIntoView();
-                }
+                if (user.cel !== -1) user.scrollToCursor?.();
             })
             users.append(div);
         }
@@ -758,8 +755,15 @@ function displayFileData(fileData) {
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
     for (const cell of fileData.data.cells) {
         addCellElement(cell, fileData);
-    }
 
+        let i = 0;
+        while (i < users.length) {
+            if (users[i].cel === cell.id) {
+                createCustomCursor(cell.editor, { ...users[i], user: users[i] });
+                users.splice(i, 1);
+            } else i++;
+        }
+    }
 }
 
 function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem: notebook}) {
