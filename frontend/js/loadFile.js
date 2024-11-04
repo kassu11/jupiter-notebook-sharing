@@ -140,9 +140,10 @@ editor1.onDidBlurEditorText(event => {
     // editor1.setValue(`# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`)
 });
 
-function changeEditorLanguage(newLanguage) {
-    const model = editor1.getModel(); // Get the current model
-    monaco.editor.setModelLanguage(model, newLanguage); // Change the language
+function changeEditorLanguage(editor, language) {
+    const model = editor.getModel();
+    if (language === "markdown") monaco.editor.setModelLanguage(model, language);
+    else if (language === "code") monaco.editor.setModelLanguage(model, "python");
 }
 
 
@@ -295,58 +296,46 @@ window.addEventListener("blur", async () => {
 })
 
 setInterval(async () => {
-    for(const fileData of allFileHandlers) {
-        const file = await fileData.handler.getFile();
-        if (file.lastModified !== fileData.lastModified) {
-            fileData.lastModified = file.lastModified;
+    for (const localFileData of allFileHandlers) {
+        const file = await localFileData.handler.getFile();
+        if (file.lastModified !== localFileData.lastModified) {
+            localFileData.lastModified = file.lastModified;
             const fileText = await file.text();
             const jsonData = JSON.parse(fileText);
+            const localCells = {};
+            for(const cell of localFileData.data.cells) localCells[cell.id] = cell;
 
-            const localCells = [...fileData.data.cells];
-            const fileCells = [...jsonData.cells];
+            localFileData.data = {...jsonData, cells: localFileData.data.cells};
 
-            let i = 0;
-            let elementIndex = 0;
-            main: while(i < localCells.length) {
-                if (localCells[i]?.id == null) continue;
-                for(let j = 0; j < fileCells.length; j++) {
-                    if (localCells[i]?.id === fileCells[j]?.id) {
-                        localCells[i].metadata = fileCells[j].metadata;
-                        // localCells[i].cell_type = fileCells[j].cell_type;
-                        localCells[i].outputs = fileCells[j].outputs;
-                        localCells[i].execution_count = fileCells[j].execution_count;
+            for (const newCell of jsonData.cells) {
+                const cell = localCells[newCell.id];
+                if (!cell) continue;
 
-                        const elementIndex = fileData.data.cells.findIndex(cell => cell.id === localCells[i]?.id);
-                        const cellElem = document.querySelectorAll(".notebook-cell")[elementIndex];
+                cell.metadata = newCell.metadata;
+                // cell.cell_type = newCell.cell_type;
+                cell.outputs = newCell.outputs;
+                cell.execution_count = newCell.execution_count;
 
-                        updateOutputFromCellElem(cellElem, fileCells[j]);
+                const elementIndex = localFileData.data.cells.findIndex(c => c === cell);
+                const cellElem = document.querySelectorAll(".notebook-cell")[elementIndex];
 
-                        // TODO: last_id is no longer set, add modified_since_last_save to file data
-                        if (fileCells[j].last_id === localCells[i].custom_modifications) {
-                            if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
-    
-                            changeInsideCell(
-                                fileData.key,
-                                fileData.name,
-                                localCells[i].id,
-                                localCells[i].source,
-                                fileCells[j].source
-                            )
-                        }
+                updateOutputFromCellElem(cellElem, newCell);
 
+                // TODO: last_id is no longer set, add modified_since_last_save to file data
+                if (newCell.last_id === cell.custom_modifications) {
+                    if (Array.isArray(newCell.source)) newCell.source = newCell.source.join("");
 
-                        fileCells.splice(j, 1);
-                        localCells.splice(i, 1);
-                        continue main;
-                    }
-
+                    changeInsideCell(
+                        localFileData.key,
+                        localFileData.name,
+                        cell.id,
+                        cell.source,
+                        newCell.source
+                    )
                 }
-                
-                console.log("merge id not found: ", localCells[0]);
-                i++;
             }
 
-            console.log(fileData.name, file.lastModified);
+            console.log(localFileData.name, file.lastModified);
         }
     }
 }, 100);
@@ -482,6 +471,7 @@ function socketJoin(key) {
 
         const fileData = files[change.key][change.filename];
         const cellIndex = fileData.data.cells.findIndex(v => v.id === change.cel);
+        if (cellIndex === -1) return console.error("Cell change cancelled do to unknown cell id");
 
         if (change.type === "delete") {
             fileData.data.cells.splice(cellIndex, 1);
@@ -523,7 +513,7 @@ function socketJoin(key) {
             if (fileActive) {
                 const cellElem = document.querySelectorAll(".notebook-cell")[cellIndex];
                 cellElem.querySelector("select").value = change.newType;
-                updateCodeHighlight(cellElem);
+                changeEditorLanguage(fileData.data.cells[cellIndex].editor, change.newType);
             }
         }
     });
@@ -772,6 +762,8 @@ function displayFileData(fileData) {
                 key: fileData.key,
                 newType: typeSelection.value
             });
+
+            changeEditorLanguage(cell.editor, typeSelection.value);
         });
 
         const markdownOption = document.createElement("option");
