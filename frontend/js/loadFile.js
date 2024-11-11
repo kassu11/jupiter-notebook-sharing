@@ -449,6 +449,7 @@ function socketJoin(key) {
         }
         
         users.textContent = "";
+        fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
         for(const user of Object.values(allRoomUsers)) {
             const div = document.createElement("div");
             div.classList.toggle("inactive", user.cel === -1);
@@ -462,12 +463,9 @@ function socketJoin(key) {
                 if (user.cel !== -1) user.scrollToCursor?.();
             })
             users.append(div);
-        }
 
-        const parentElem = document.querySelector(`li.file[file="${selectionPackage.filename}"]`);
-        if (parentElem) {
-            parentElem.querySelectorAll("span")?.forEach(span => span.remove());
-            for(const user of Object.values(allRoomUsers)) {
+            const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
+            if (parentElem) {
                 const span = document.createElement("span");
                 span.textContent = user.username;
                 span.style.background = user.color;
@@ -475,7 +473,7 @@ function socketJoin(key) {
                 parentElem.append(span);
             }
         }
-        
+
 
         if (curIndex === -1) return allRoomUsers[selectionPackage.userId]?.clearCursor?.();
         if (currentFileName !== selectionPackage.filename) return;
