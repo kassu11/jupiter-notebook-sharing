@@ -409,6 +409,7 @@ join.addEventListener("click", async e => {
         for (const [key, value] of rows) {
             if (value.file === true) {
                 const li = document.createElement("li");
+                li.setAttribute("file", value.fullFileName);
                 li.textContent = key;
                 li.classList.add("file");
                 parentUl.append(li);
@@ -462,6 +463,19 @@ function socketJoin(key) {
             })
             users.append(div);
         }
+
+        const parentElem = document.querySelector(`li.file[file="${selectionPackage.filename}"]`);
+        if (parentElem) {
+            parentElem.querySelectorAll("span")?.forEach(span => span.remove());
+            for(const user of Object.values(allRoomUsers)) {
+                const span = document.createElement("span");
+                span.textContent = user.username;
+                span.style.background = user.color;
+                span.classList.add("user-indicator")
+                parentElem.append(span);
+            }
+        }
+        
 
         if (curIndex === -1) return allRoomUsers[selectionPackage.userId]?.clearCursor?.();
         if (currentFileName !== selectionPackage.filename) return;
@@ -738,6 +752,7 @@ async function createFile(file, parentUl, fileNames, path) {
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
     allFileHandlers.push(fileNames[fileName]);
     const li = document.createElement("li");
+    li.setAttribute("file", fileName);
     li.classList.add("file", "real");
     li.textContent = file.name;
     li.addEventListener("click", () => displayFileData(fileNames[fileName]));
@@ -751,6 +766,8 @@ function displayFileData(fileData) {
     editors.length = 0;
     currentFileName = fileData.name;
     currentKey = fileData.key;
+    document.querySelector("li.file.selected")?.classList.remove("selected");
+    document.querySelector(`li.file[file="${fileData.name}"]`)?.classList.add("selected");
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
     for (const cell of fileData.data.cells) {
@@ -889,20 +906,19 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         });
 
         editor.onDidBlurEditorText(() => {
-            // TODO: Enable this code when debugging is done
-            // editor.setSelection({
-            //     positionColumn: 0,
-            //     positionLineNumber: 0,
-            //     selectionStartColumn: 0,
-            //     selectionStartLineNumber: 0,
-            // });
-            // currentCelId = -1;
-            // socket.emit("caretUpdate", {
-            //     cel: -1,
-            //     key: fileData.key,
-            //     filename: fileData.name,
-            //     username: username.value
-            // });
+            editor.setSelection({
+                positionColumn: 0,
+                positionLineNumber: 0,
+                selectionStartColumn: 0,
+                selectionStartLineNumber: 0,
+            });
+            currentCelId = -1;
+            socket.emit("caretUpdate", {
+                cel: -1,
+                key: fileData.key,
+                filename: fileData.name,
+                username: username.value
+            });
         });
 
         editor.onDidContentSizeChange(() => {

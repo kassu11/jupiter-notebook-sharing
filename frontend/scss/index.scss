@@ -90,13 +90,27 @@ body {
 
 .fileTreeContainer {
     position: relative;
-    min-width: 300px;
+    width: 300px;
+    flex-shrink: 0;
+    flex-grow: 0;
     overflow-y: auto;
     border: 2px solid gray;
 
     li:not(.file)::marker {
         content: '📂 ';
         font-size: 1.2em;
+    }
+
+    .selected {
+        background-color: lightblue;
+        color: black;
+        font-weight: 600;
+    }
+
+    .user-indicator {
+        position: relative;
+        display: inline-block;
+        margin-left: 10px;
     }
 
     li.file::marker {
