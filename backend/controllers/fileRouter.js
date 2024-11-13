@@ -31,25 +31,22 @@ const getPosts = async (req, res) => {
 };
 
 const hostedFiles = {}
-const hostingUsers = {}
+const roomUsers = {}
+const users = {}
 
 const hostFiles = async (req, res) => {
 	const { id, key, fileData } = req.body;
 
-	console.log(hostedFiles, hostingUsers)
-
 	try {
-		if (id == null) throw new Error("Socket id is not valid");
+		if (!(id in users)) throw new Error("Socket id is not valid");
 		if (key in hostedFiles) throw new Error("Dublicate room key");
 		if (!key || key.length < 2) throw new Error("Key is not long enough");
-		if (id in hostingUsers) {
-			delete hostedFiles[hostingUsers[id]];
-		}
+		roomUsers[key] = [{id}];
 		hostedFiles[key] = fileData;
+		users[id] = key;
 		for(const file of Object.values(fileData)) {
 			file.changes = new Filo(30);
 		}
-		hostingUsers[id] = key;
 		res.json({"ok": 200});
 	} catch (err) {
 		res.status(500).json({ message: err.message });
@@ -57,15 +54,20 @@ const hostFiles = async (req, res) => {
 };
 
 const getFiles = async (req, res) => {
-	const { key } = req.params;
+	const { id, key } = req.body;
 
 	try {
+		if (!(id in users)) throw new Error("Socket id is not valid");
+		if (users[id]) throw new Error("User has already joined a other session");
 		if (!hostedFiles[key]) throw new Error("Invalid key");
+
+		users[id] = key;
+		roomUsers[key].push({id});
 		const clone = structuredClone(hostedFiles[key]);
 		for(const file of Object.values(clone)) {
 			delete file.changes;
 		}
-		res.json({"files": clone});
+		res.json({ "files": clone, users: roomUsers });
 	} catch (err) {
 		res.status(500).json({ message: err.message });
 	}
@@ -76,5 +78,6 @@ module.exports = {
 	hostFiles,
 	getFiles,
 	hostedFiles,
-	hostingUsers,
+	roomUsers,
+	users
 };

@@ -14,7 +14,7 @@ const router = express.Router();
 // router.delete("/:id", weakAuthentication, postController.deletePost);
 
 router.post("/host-all", fileController.hostFiles);
-router.get("/loaded/:key", fileController.getFiles);
+router.post("/get-file", fileController.getFiles);
 // router.put("/:id/dislike", weakAuthentication, postController.dislikePost);
 // router.patch("/:id/reply", weakAuthentication, postController.replyToPost);
 
