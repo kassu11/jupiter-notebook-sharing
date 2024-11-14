@@ -67,7 +67,7 @@ const getFiles = async (req, res) => {
 		for(const file of Object.values(clone)) {
 			delete file.changes;
 		}
-		res.json({ "files": clone, users: roomUsers });
+		res.json({ "files": clone, users: roomUsers[key] });
 	} catch (err) {
 		res.status(500).json({ message: err.message });
 	}

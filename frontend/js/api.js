@@ -1,16 +1,6 @@
 
 const baseURL = "https://jupiter-notebook-sharing.onrender.com/api/"
 export const api = {
-    hostLobby: async ({ key }) => {
-        const response = await fetch(baseURL + `lobby/host/${key}`, {
-            method: "POST",
-            body: "",
-        });
-
-        const json = await response.json();
-
-        return { ...json, status: response.status };
-    },
     hostFiles: async ({ key, fileData, id }) => {
         const response = await fetch(baseURL + `files/host-all`, {
             method: "POST",

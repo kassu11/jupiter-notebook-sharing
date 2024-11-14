@@ -31,6 +31,10 @@ const socketConnection = (socket) => {
 		try {
             if (!(caret.key in hostedFiles)) throw new Error("Invalid key");
             const socketKey = `caretUpdate${caret.key}`;
+            const user = roomUsers[caret.key].find(user => user.id = socket.id);
+            if (!user) throw new Error("User not found");
+            user.caret = caret;
+
             socket.broadcast.emit(socketKey, {...caret, userId: socket.id});
 		} catch (e) {
 			console.error(e)

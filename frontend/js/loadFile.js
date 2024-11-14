@@ -69,6 +69,7 @@ window.addEventListener("resize", () => {
 
 username.addEventListener("input", () => {
     if (!currentKey.length) return;
+
     socket.emit("caretUpdate", {
         cel: currentCelId,
         key: currentKey,
@@ -183,6 +184,7 @@ host.addEventListener("click", async () => {
     if (response.status !== 200) return alert(response.message);
 
     files[key] = filesData;
+    currentKey = key;
 
     generateFileTree(filesData);
     initLocalFileInfos(key, filesData);
@@ -202,6 +204,9 @@ join.addEventListener("click", async () => {
         value.key = roomKey;
     }
 
+    socket.emit("caretUpdate", { cel: -1, key: roomKey, username: username.value });
+
+    currentKey = roomKey;
     generateFileTree(fetchedFiles.files);
     initLocalFileInfos(roomKey, fetchedFiles.files);
     socketJoin(roomKey);
@@ -230,7 +235,6 @@ function generateFileTree(fileData) {
                 li.textContent = key;
                 li.classList.add("file");
                 parentUl.append(li);
-                console.log(files, value)
                 li.addEventListener("click", () => displayFileData(fileData[value.fullFileName]));
             } else {
                 const li = document.createElement("li");
@@ -255,7 +259,7 @@ function socketJoin(key) {
     })
 
     socket.on(`caretUpdate${key}`, selectionPackage => {
-        const curIndex = files[key][selectionPackage.filename].data.cells.findIndex(row => row.id === selectionPackage.cel);
+        const curIndex = files[key][selectionPackage.filename]?.data.cells.findIndex(row => row.id === selectionPackage.cel);
         const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
 
         if(editor) {
@@ -575,9 +579,10 @@ function displayFileData(fileData) {
     notebook.textContent = "";
     editors.length = 0;
     currentFileName = fileData.name;
-    currentKey = fileData.key;
     document.querySelector("li.file.selected")?.classList.remove("selected");
     document.querySelector(`li.file[file="${fileData.name}"]`)?.classList.add("selected");
+
+    socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
     for (const cell of fileData.data.cells) {
