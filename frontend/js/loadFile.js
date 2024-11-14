@@ -441,7 +441,7 @@ function socketJoin(key) {
         for (const change of changes) {
             const delta = change.data.length - (change.end - change.start);
 
-            if (selection.end <= change.start && selection.end - selection.start > 0) continue;
+            if (selection.end <= change.start && selection.end - selection.start >= 0) continue;
             else if (change.end <= selection.start) {
                 selection.start += delta;
                 selection.end += delta;
