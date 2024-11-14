@@ -2,6 +2,11 @@
     box-sizing: border-box;
 }
 
+html {
+    appearance: dark;
+    color-scheme: dark;
+}
+
 @font-face {
 	font-family: "JetBrainsMono";
 	src: url("../fonts/JetBrainsMono-VariableFont_wght.woff2") format("woff2-variations");
@@ -27,7 +32,7 @@ body {
 .header {
     height: 50px;
     flex-shrink: 0;
-    background: #dfdfdf;
+    background: #000000;
     display: flex;
     place-items: center;
     gap: 5px;
@@ -40,7 +45,6 @@ body {
         gap: 5px;
 
         div {
-            // background-color: red;
             border-radius: 2px;
             height: max-content;
             display: grid;
@@ -49,9 +53,10 @@ body {
             opacity: 1;
             color: white;
             font-weight: 600;
+            background-color: var(--user-cursor); 
             cursor: pointer;
 
-            &.inactive:hover {
+            &.inactive {
                 opacity: .5;
             }
         }
@@ -70,13 +75,30 @@ body {
 
 .fileTreeContainer {
     position: relative;
-    min-width: 300px;
+    width: 300px;
+    flex-shrink: 0;
+    flex-grow: 0;
     overflow-y: auto;
     border: 2px solid gray;
 
     li:not(.file)::marker {
         content: '📂 ';
         font-size: 1.2em;
+    }
+
+    .selected {
+        background-color: lightblue;
+        color: black;
+        font-weight: 600;
+    }
+
+    .user-indicator {
+        position: relative;
+        display: inline-block;
+        margin-left: 10px;
+        color: white;
+        padding-inline: 3px;
+        background-color: var(--user-cursor); 
     }
 
     li.file::marker {
@@ -102,142 +124,13 @@ body {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 15px;
     width: 100%;
     padding-right: 10px;
-    overflow-y: auto;
+    overflow-y: scroll;
     padding-bottom: 700px;
-
-    .cell {
-        width: 100%;
-        // background: pink;
-        border: 2px solid gray;
-        display: flex;
-        flex-direction: column;
-        padding: 10px;
-        gap: 10px;
-        font-family: "JetBrainsMono";
-
-        .buttonContainer {
-            display: flex;
-            gap: 5px;
-        }
-
-        * {
-            font: inherit;
-        }
-
-        .textContainer {
-            position: relative;
-            background: #f4f2f0;
-
-            &.colorHighlight {
-                textarea {
-                    color: transparent;
-                }
-                
-                .userCarets {
-                    color: transparent;
-                }
-            }
-
-            pre, textarea, code {
-                position: relative;
-                all: unset;
-                font-size: 14px;
-                display: block;
-                font-weight: 450;
-                width: 100%;
-                white-space: pre-wrap;
-                overflow: hidden;
-                word-break: break-all;
-                padding: 10px;
-                box-sizing: border-box;
-            }
-
-            textarea {
-                position: relative;
-                z-index: 2;
-                caret-color: black;
-
-                &::selection {
-                    color: white;
-                    background-color: rgba(0, 99, 161, 0.781);
-                }
-            }
-
-            .highlight {
-                position: absolute;
-                user-select: none;
-                pointer-events: none;
-                padding: 0px;
-
-                code {
-                    padding-right: 6px;
-                }
-            }
-    
-            .userCarets {
-                position: absolute;
-                user-select: none;
-                pointer-events: none;
-                --bg: rgb(255, 0, 0);
-
-                &:not(:empty) + textarea {
-                    color: transparent;
-                }
-   
-                :not(.noFill) {
-                    background-color: color-mix(in srgb, var(--bg), transparent 40%);
-                    color: white;
-                }
-    
-                .noFill {
-                    background: unset;
-                }
-    
-                .forward, .backward {
-                    position: relative;
-                    &::before, &::after {
-                        position: absolute;
-                        height: 20px;
-                        width: 3px;
-                        background-color: var(--bg);
-                    }
-                }
-    
-                .forward::after {
-                    content: "";
-                    bottom: 0px;
-                    translate: -2px 0;
-                }
-    
-                .backward::before {
-                    content: "";
-                    top: 0px;
-                    translate: -2px 0;
-                }
-            }
-        }
-
-        img {
-            max-width: 100%;
-            min-width: 300px;
-        }
-
-        .outputContainer {
-            
-            summary {
-                cursor: pointer;
-            }
-
-            > * {
-                overflow: auto;
-                max-width: 100%;
-            }
-        } 
-    }
-
+    scroll-margin-top: 25px;
+    scroll-margin-bottom: 25px;
 }
 
 table {

@@ -1,6 +1,7 @@
 import socketIO from "socket.io-client";
 import {api} from "./api";
-import Prism from "./prism";
+import * as monaco from 'monaco-editor';
+import {createCustomCursor} from "./customCursor";
 
 const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
@@ -8,6 +9,40 @@ const host = document.querySelector("#host");
 const join = document.querySelector("#join");
 const users = document.querySelector("#users");
 const username = document.querySelector("#username");
+
+self.MonacoEnvironment = {
+    getWorkerUrl: function (moduleId, label) {
+        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+        self.MonacoEnvironment = { baseUrl: '${window.location.origin}' };`
+        )}`;
+    }
+};
+
+const editorContainer = document.getElementById("editor-container");
+
+editorContainer.addEventListener("wheel", e => {
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+}, {capture: true});
+
+window.addEventListener("resize", () => resizeAllEditors());
+
+function resizeAllEditors() {
+    editors.forEach(editor => {
+        editor.layout({
+            width: editor.getContainerDomNode().clientWidth,
+            height: editor.getContentHeight()
+        });
+    });
+}
+
+
+function changeEditorLanguage(editor, language) {
+    const model = editor.getModel();
+    if (language === "markdown") monaco.editor.setModelLanguage(model, language);
+    else if (language === "code") monaco.editor.setModelLanguage(model, "python");
+}
+
 
 const files = {};
 const allFileHandlers = [];
@@ -34,6 +69,7 @@ window.addEventListener("resize", () => {
 
 username.addEventListener("input", () => {
     if (!currentKey.length) return;
+
     socket.emit("caretUpdate", {
         cel: currentCelId,
         key: currentKey,
@@ -64,61 +100,62 @@ window.addEventListener("blur", async () => {
 })
 
 setInterval(async () => {
-    for(const fileData of allFileHandlers) {
-        const file = await fileData.handler.getFile();
-        if (file.lastModified !== fileData.lastModified) {
-            fileData.lastModified = file.lastModified;
+    for (const localFileData of allFileHandlers) {
+        const file = await localFileData.handler.getFile();
+        if (file.lastModified !== localFileData.lastModified) {
+            localFileData.lastModified = file.lastModified;
             const fileText = await file.text();
             const jsonData = JSON.parse(fileText);
+            const localCells = {};
+            for(const cell of localFileData.data.cells) localCells[cell.id] = cell;
 
-            const localCells = [...fileData.data.cells];
-            const fileCells = [...jsonData.cells];
+            localFileData.data = {...jsonData, cells: localFileData.data.cells};
 
-            let i = 0;
-            let elementIndex = 0;
-            main: while(i < localCells.length) {
-                if (localCells[i]?.merge_id == null) continue;
-                for(let j = 0; j < fileCells.length; j++) {
-                    if (localCells[i]?.merge_id === fileCells[j]?.merge_id) {
-                        localCells[i].metadata = fileCells[j].metadata;
-                        // localCells[i].cell_type = fileCells[j].cell_type;
-                        localCells[i].outputs = fileCells[j].outputs;
-                        localCells[i].execution_count = fileCells[j].execution_count;
+            for (const newCell of jsonData.cells) {
+                const cell = localCells[newCell.id];
+                if (!cell) continue;
 
-                        const elementIndex = fileData.data.cells.findIndex(cell => cell.merge_id === localCells[i]?.merge_id);
-                        const cellElem = document.querySelectorAll(".cell")[elementIndex];
-                        updateOutputFromCellElem(cellElem, fileCells[j]);
+                cell.metadata = newCell.metadata;
+                // cell.cell_type = newCell.cell_type;
+                cell.outputs = newCell.outputs;
+                cell.execution_count = newCell.execution_count;
 
-                        console.log(fileCells[j].last_id)
+                const elementIndex = localFileData.data.cells.findIndex(c => c === cell);
+                const cellElem = document.querySelectorAll(".notebook-cell")[elementIndex];
 
-                        if (fileCells[j].last_id === localCells[i].id) {
-                            if (Array.isArray(fileCells[j].source)) fileCells[j].source = fileCells[j].source.join("");
-    
-                            changeInsideCell(
-                                fileData.key,
-                                fileData.name,
-                                localCells[i].merge_id,
-                                localCells[i].source,
-                                fileCells[j].source
-                            )
-                        }
+                updateOutputFromCellElem(cellElem, newCell);
 
+                // TODO: last_id is no longer set, add modified_since_last_save to file data
+                if (newCell.last_id === cell.custom_modifications) {
+                    if (Array.isArray(newCell.source)) newCell.source = newCell.source.join("");
 
-                        fileCells.splice(j, 1);
-                        localCells.splice(i, 1);
-                        continue main;
-                    }
-
+                    changeInsideCell(
+                        localFileData.key,
+                        localFileData.name,
+                        cell.id,
+                        cell.source,
+                        newCell.source
+                    )
                 }
-                
-                console.log("merge id not found: ", localCells[0]);
-                i++;
             }
 
-            console.log(fileData.name, file.lastModified);
+            console.log(localFileData.name, file.lastModified);
         }
     }
 }, 100);
+
+function generateRandomId() {
+    const chars = "0123456789abcdefghijklmnopqrstuvxyz";
+    return `${randomString(chars, 8)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 4)}-${randomString(chars, 12)}`;
+}
+
+function randomString(chars, length) {
+    return Array.from({length}, () => randomCharFromString(chars)).join("");
+}
+
+function randomCharFromString(string) {
+    return string[Math.floor(Math.random() * string.length)];
+}
 
 
 // lag.addEventListener("click", async e => {
@@ -133,34 +170,61 @@ host.addEventListener("click", async () => {
     }
     const key = prompt("Set custom room key");
     const filesData = await loadProjectFolder();
-    files[key] = filesData;
 
     for(const value of Object.values(filesData)) {
         value.key = key;
     }
 
-    await api.hostFiles({
+    const response = await api.hostFiles({
         fileData: jsonDataCopyForServer(filesData), 
         key, 
         id: socket.id
     });
 
+    if (response.status !== 200) return alert(response.message);
+
+    files[key] = filesData;
+    currentKey = key;
+
+    generateFileTree(filesData);
     initLocalFileInfos(key, filesData);
     socketJoin(key);
 });
 
-join.addEventListener("click", async e => {
+join.addEventListener("click", async () => {
     if (socket.id == null) return alert("Server is not yet open, try again");
     const roomKey = prompt("Enter room key");
 
-    const fetchedFiles = await api.getLoadedFiles({key: roomKey});
+    const fetchedFiles = await api.getLoadedFiles({key: roomKey, id: socket.id});
+
+    if (fetchedFiles.status !== 200) return alert(fetchedFiles.message);
+
     files[roomKey] = fetchedFiles.files;
     for(const value of Object.values(fetchedFiles.files)) {
         value.key = roomKey;
     }
-    const fileTreeObject = {};
 
-    for(const file of Object.values(fetchedFiles.files)) {
+    socket.emit("caretUpdate", { cel: -1, key: roomKey, username: username.value });
+
+    fetchedFiles.users?.forEach(user => {
+        if (user.id == socket.id) return;
+        allRoomUsers[user.id] = user.caret ?? { cel: -1 }
+        allRoomUsers[user.id].userId = user.id;
+        allRoomUsers[user.id].color = user.color;
+    });
+
+    updateUserIcons();
+
+    currentKey = roomKey;
+    generateFileTree(fetchedFiles.files);
+    initLocalFileInfos(roomKey, fetchedFiles.files);
+    socketJoin(roomKey);
+});
+
+function generateFileTree(fileData) {
+    const fileTreeObject = {};
+    
+    for(const file of Object.values(fileData)) {
         let curr = fileTreeObject;
         file.name.substring(1).split("/").forEach((n, i, arr) => {
             curr[n] ??= {};
@@ -176,10 +240,11 @@ join.addEventListener("click", async e => {
         for (const [key, value] of rows) {
             if (value.file === true) {
                 const li = document.createElement("li");
+                li.setAttribute("file", value.fullFileName);
                 li.textContent = key;
                 li.classList.add("file");
                 parentUl.append(li);
-                li.addEventListener("click", () => displayFileData(files[roomKey][value.fullFileName]));
+                li.addEventListener("click", () => displayFileData(fileData[value.fullFileName]));
             } else {
                 const li = document.createElement("li");
                 li.textContent = key;
@@ -192,60 +257,35 @@ join.addEventListener("click", async e => {
     }
 
     recursiveFoldering(Object.entries(fileTreeObject), fileTree);
-
-    console.log(files)
-
-    console.log(fetchedFiles, Object.entries(fileTreeObject));
-
-    initLocalFileInfos(roomKey, fetchedFiles.files);
-    socketJoin(roomKey);
-});
+}
 
 function socketJoin(key) {
-    socket.on(`caretUpdate${key}`, caretUpdate);
-    function caretUpdate(caret) {
-        const oldCaret = allRoomUsers[caret.userId];
-        if (oldCaret) allRoomUsers[caret.userId] = {...oldCaret, ...caret};
-        else {
-            caret.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
-            allRoomUsers[caret.userId] = caret;
+    socket.on(`userDisconnect${key}`, userData => {
+        allRoomUsers[userData.userId]?.clearCursor?.();
+        delete allRoomUsers[userData.userId];
+        updateUserIcons();
+    })
+
+    socket.on(`caretUpdate${key}`, selectionPackage => {
+        const curIndex = files[key][selectionPackage.filename]?.data.cells.findIndex(row => row.id === selectionPackage.cel);
+        const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
+
+        if(editor) {
+            selectionPackage.selections &&= preprocessSelection(editor, selectionPackage.selections);
         }
+
+        const oldCarets = allRoomUsers[selectionPackage.userId];
+        if (oldCarets) allRoomUsers[selectionPackage.userId] = {...oldCarets, ...selectionPackage};
+        else allRoomUsers[selectionPackage.userId] = selectionPackage;
+
+        updateUserIcons();
+
+        if (curIndex === -1) return allRoomUsers[selectionPackage.userId]?.clearCursor?.();
+        if (currentFileName !== selectionPackage.filename) return;
         
-        users.textContent = "";
-        for(const user of Object.values(allRoomUsers)) {
-            const div = document.createElement("div");
-            div.classList.toggle("inactive", user.cel === -1);
-            if (user.username) div.textContent = user.username;
-            else div.textContent = user.userId.substring(0, 3);
-            div.style.background = user.color;
-            div.addEventListener("click", () => {
-                const fileData = files[user.key][user.filename];
-                if (!fileData) return;
-                if (currentFileName !== user.filename) displayFileData(fileData);
-                if (user.cel !== -1) {
-                    const index = fileData.data.cells.findIndex(cell => cell.merge_id === user.cel);
-                    document.querySelectorAll(".cell")[index]?.scrollIntoView();
-                }
-            })
-            users.append(div);
-        }
-
-
-
-        const oldIndex = oldCaret == null ? -1 : files[key][caret.filename].data.cells.findIndex(row => row.merge_id === oldCaret.cel);
-        const curIndex = files[key][caret.filename].data.cells.findIndex(row => row.merge_id === caret.cel);
-        if (currentFileName !== caret.filename) return;
-        
-        if (oldIndex !== -1 && oldIndex !== curIndex) {
-            const text = files[oldCaret.key][oldCaret.filename].data.cells[oldIndex].source;
-            updateUserCaretElement(oldCaret, text, oldIndex);
-        }
-
-        if (curIndex === -1) return;
-
-        const text = files[key][caret.filename].data.cells[curIndex].source;
-        updateUserCaretElement(caret, text, curIndex);
-    }
+        if (selectionPackage.selections) createCustomCursor(editor, {...selectionPackage, user: allRoomUsers[selectionPackage.userId]});
+        else allRoomUsers[selectionPackage.userId]?.clearCursor?.();
+    });
 
     socket.on(`cellChange${key}`, change => {
         const unappliedChanges = allUnappliedChanges[key + change.filename]
@@ -257,27 +297,26 @@ function socketJoin(key) {
         }
 
         const fileData = files[change.key][change.filename];
-        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
+        const cellIndex = fileData.data.cells.findIndex(v => v.id === change.cel);
+        if (cellIndex === -1) return console.error("Cell change cancelled do to unknown cell id");
 
         if (change.type === "delete") {
             fileData.data.cells.splice(cellIndex, 1);
             if (fileActive) {
-                document.querySelectorAll(".cell")[cellIndex].remove();
+                document.querySelectorAll(".notebook-cell")[cellIndex].remove();
             }
         } else if (change.type === "add") {
-            if (fileActive) {
-                const cellContainer = createCellElement(fileData, change.data);
-                document.querySelectorAll(".cell")[cellIndex].after(cellContainer);
-                updateTextAreaHeight(cellContainer.querySelector("textarea"));
-                
-            }
             fileData.data.cells.splice(cellIndex + 1, 0, change.data);
             initLocalFileInfos(key, [fileData]);
+            if (fileActive) {
+                const parentElem = document.querySelectorAll(".notebook-cell")[cellIndex];
+                addCellElement(change.data, fileData, {type: "after", elem: parentElem});
+            }
         } else if (change.type === "moveUp") {
             if (fileActive) {
-                const nextCell = document.querySelectorAll(".cell")[cellIndex - 1];
-                const current = document.querySelectorAll(".cell")[cellIndex];
-                const activeCellElem = document.activeElement?.closest(".cell");
+                const nextCell = document.querySelectorAll(".notebook-cell")[cellIndex - 1];
+                const current = document.querySelectorAll(".notebook-cell")[cellIndex];
+                const activeCellElem = document.activeElement?.closest(".notebook-cell");
 
                 if(activeCellElem === current) current.after(nextCell);
                 else nextCell.before(current);
@@ -285,9 +324,9 @@ function socketJoin(key) {
             [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
         } else if (change.type === "moveDown") {
             if (fileActive) {
-                const prevCell = document.querySelectorAll(".cell")[cellIndex + 1];
-                const current = document.querySelectorAll(".cell")[cellIndex];
-                const activeCellElem = document.activeElement?.closest(".cell");
+                const prevCell = document.querySelectorAll(".notebook-cell")[cellIndex + 1];
+                const current = document.querySelectorAll(".notebook-cell")[cellIndex];
+                const activeCellElem = document.activeElement?.closest(".notebook-cell");
                 
                 if(activeCellElem === current) current.before(prevCell);
                 else prevCell.after(current);
@@ -297,123 +336,184 @@ function socketJoin(key) {
         } else if(change.type === "changeType") {
             fileData.data.cells[cellIndex].cell_type = change.newType;
             if (fileActive) {
-                const cellElem = document.querySelectorAll(".cell")[cellIndex];
+                const cellElem = document.querySelectorAll(".notebook-cell")[cellIndex];
                 cellElem.querySelector("select").value = change.newType;
-                updateCodeHighlight(cellElem);
+                changeEditorLanguage(fileData.data.cells[cellIndex].editor, change.newType);
             }
         }
     });
 
-    socket.on(`fileUpdates${key}`, change => {
-        const unappliedChanges = allUnappliedChanges[key + change.filename][change.cel].unappliedChanges;
-        const fileData = files[change.key][change.filename];
-        const cellIndex = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
-        let needToUpdateCaret = change.cel === currentCelId && currentFileName === change.filename;
+    socket.on(`fileUpdates${key}`, changePackage => {
+        const unappliedChanges = allUnappliedChanges[key + changePackage.filename][changePackage.cel].unappliedChanges;
+        const fileData = files[changePackage.key][changePackage.filename];
+        const cellIndex = fileData.data.cells.findIndex(v => v.id === changePackage.cel);
+        const cell = fileData.data.cells[cellIndex];
+        const fileUsers = getFileUsers(changePackage);
+        let needToUpdateSelection = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
         if(unappliedChanges.length) {
             const removeUserId = (key, val) => key === "userId" ? undefined : val;
-            if (JSON.stringify(change, removeUserId) === JSON.stringify(unappliedChanges[0])) {
+            if (JSON.stringify(changePackage, removeUserId) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
-                needToUpdateCaret = false;
+                needToUpdateSelection = false;
             }
         }
 
-        const currentTextarea = document.querySelectorAll("textarea")[cellIndex];
-        const start = currentTextarea?.selectionStart;
-        const end = currentTextarea?.selectionEnd;
-        const dir = currentTextarea?.selectionDirection;
-        changeTextarea([change, ...unappliedChanges]);
-        if (needToUpdateCaret) updateCaret(change, start, end, dir, cellIndex);
-        if (currentFileName === change.filename) updateUserCarets(change);
-        
-        for(let i = 0; i < unappliedChanges.length; i++) {
-            unappliedChanges[i] = advanceChangeForward(change, unappliedChanges[i]);
-            unappliedChanges[i].id++;
+        const selections = cell.editor ?
+            preprocessSelection(cell.editor, cell.editor.getSelections())
+            : [];
+
+        fileUsers.forEach(user => user.clearCursor?.());
+
+        if (cell.editor) changeEditorText(
+            cell.editor,
+            cell.source,
+            [changePackage, ...unappliedChanges]
+        );
+
+        for(let i = 1; i < changePackage.changes.length; i++) {
+            for(let j = 0; j < i; j++) {
+                changePackage.changes[i] = advanceChangeForward(changePackage.changes[j], changePackage.changes[i]);
+            }
         }
 
-        const cell = fileData.data.cells[cellIndex];
-        const sourceText = cell.source;
-        cell.source = sourceText.substring(0, change.start) + change.data + sourceText.substring(change.end);
-        cell.id++;
+        if (needToUpdateSelection) {
+            cell.editor.setSelections(selections.map(selection => {
+                return getUpdatedSelectionByChanges(cell.editor, changePackage.changes, selection);
+            }));
+        }
 
-        if (needToUpdateCaret) {
-            caretUpdate({
-                ...change,
-                selectionDirection: "forward",
-                selectionEnd: change.start,
-                selectionStart: change.start,
+        if (cell.editor) updateUserCarets(cell.editor, fileUsers, changePackage);
+
+        for (let i = 0; i < unappliedChanges.length; i++) {
+            for (const change of changePackage.changes) {
+                for(let j = 0; j < unappliedChanges[i].changes.length; j++) {
+                    unappliedChanges[i].changes[j] = advanceChangeForward(change, unappliedChanges[i].changes[j]);
+                }
+            }
+            unappliedChanges[i].custom_modifications++;
+        }
+
+        for (const change of changePackage.changes) {
+            cell.source = cell.source.substring(0, change.start) + change.data + cell.source.substring(change.end);
+        }
+        cell.custom_modifications++;
+    });
+
+    function preprocessSelection(editor, selections) {
+        for(const selection of selections) {
+            selection.start = editor.getModel().getOffsetAt({
+                lineNumber: selection.startLineNumber, 
+                column: selection.startColumn
             });
-        } else updateUserCaretElement(change, cell.source, cellIndex);
-
-    });
-
-    function updateUserCarets(change) {
-        const delta = change.data.length - (change.end - change.start);
-        for(const caret of Object.values(allRoomUsers)) {
-            if (caret.cel !== change.cel || caret.key !== change.key || caret.filename !== change.filename) continue;
-
-            if (change.end <= caret.selectionStart) caret.selectionStart += delta;
-            if (change.end <= caret.selectionEnd) caret.selectionEnd += delta;
+            selection.end = editor.getModel().getOffsetAt({
+                lineNumber: selection.endLineNumber, 
+                column: selection.endColumn
+            });
         }
+
+        return selections;
     }
 
-    function updateCaret(change, start, end, dir, index) {
-        const textarea = document.querySelectorAll("textarea")[index];
-        const delta = change.data.length - (change.end - change.start);
-        if (change.end <= start) textarea.selectionStart = start + delta;
-        if (change.end <= end) textarea.selectionEnd = end + delta;
-        textarea.selectionDirection = dir;
+    function getFileUsers(changePackage) {
+        const fileUsers = [];
+        for (const user of Object.values(allRoomUsers)) {
+            if (user.cel !== changePackage.cel) continue;
+            if (user.key !== changePackage.key) continue;
+            if (user.filename !== changePackage.filename) continue;
+            if (!user.selections) continue;
 
-        selectionStart = textarea.selectionStart;
-        selectionEnd = textarea.selectionEnd;
-        selectionDirection = textarea.selectionDirection;
-    }
-}
-
-function updateUserCaretElement(caret, text, cellIndex) {
-    const caretPre = document.querySelectorAll(".cell .userCarets")[cellIndex];
-    caretPre.textContent = "";
-    const allCellUsers = Object.values(allRoomUsers).filter(user => user.cel === caret.cel)
-        .map(user => ({
-            ...user, 
-            min: Math.min(user.selectionStart, user.selectionEnd), 
-            max: Math.max(user.selectionStart, user.selectionEnd),
-        }));
-    if(allCellUsers.length === 0) return;
-    const bitArray = Array(text.length).fill(0);
-    allCellUsers.forEach((user, i) => {
-        const mask = 1<<parseInt(i);
-        if (user.min == user.max) bitArray[user.min] |= mask;
-        for(let j = user.min; j < user.max; j++) {
-            bitArray[j] |= mask;
+            fileUsers.push(user);
         }
-    });
 
-    let start = 0;
-    for(let i = 0; i <= bitArray.length; i++) {
-        if (bitArray[i] === bitArray[i + 1] && i !== bitArray.length) continue;
+        return fileUsers;
+    }
 
-        let curSpan = caretPre;
-        allCellUsers.forEach((caret, j) => {
-            const mask = 1<<parseInt(j);
-            if ((bitArray[i] & mask) !== mask) return;
-            const span = document.createElement("span");
-            span.style.setProperty("--bg", caret.color);
-            curSpan.append(span);
-            curSpan = span;
-            if (caret.min === caret.max) {
-                span.classList.add("backward", "noFill");
-            } else if(i + 1 === caret.max && caret.selectionDirection == "forward") {
-                span.classList.add("forward");
-            } else if(start === caret.min && caret.selectionDirection == "backward") {
-                span.classList.add("backward");
+    function getUpdatedSelectionByChanges(editor, changes, selection) {
+        const isDirectionFlipped =
+            selection.positionLineNumber <= selection.selectionStartLineNumber &&
+            selection.positionColumn <= selection.selectionStartColumn;
+
+        for (const change of changes) {
+            const delta = change.data.length - (change.end - change.start);
+
+            if (selection.end <= change.start && selection.end - selection.start > 0) continue;
+            else if (change.end <= selection.start) {
+                selection.start += delta;
+                selection.end += delta;
             }
-        });
+            else if (selection.start <= change.start && change.start < selection.end && change.end > selection.end) selection.end = change.start;
+            else if (selection.start <= change.start && change.start < selection.end) selection.end += delta;
+            else if (change.start < selection.start && change.end < selection.end) {
+                selection.start = change.end + delta;
+                selection.end += delta;
+            }
+            else {
+                selection.start = change.end + delta;
+                selection.end = change.end + delta;
+            }
+        }
 
-        curSpan.append(document.createTextNode(text.substring(start, i + 1)));
-        start = i + 1;
+        if (isDirectionFlipped) [selection.start, selection.end] = [selection.end, selection.start];
+
+        const { lineNumber: selectionStartLineNumber, column: selectionStartColumn } =
+            editor.getModel().getPositionAt(selection.start);
+        const { lineNumber: positionLineNumber, column: positionColumn } =
+            editor.getModel().getPositionAt(selection.end);
+
+        return {
+            selectionStartLineNumber,
+            selectionStartColumn,
+            positionLineNumber,
+            positionColumn,
+            startLineNumber: Math.min(selectionStartLineNumber, positionLineNumber),
+            startColumn: Math.min(selectionStartColumn, positionColumn),
+            endLineNumber: Math.max(selectionStartLineNumber, positionLineNumber),
+            endColumn: Math.max(selectionStartColumn, positionColumn),
+            start: Math.min(selection.start, selection.end),
+            end: Math.max(selection.start, selection.end),
+        }
+    }
+
+    function updateUserCarets(editor, users, changePackage) {
+        for (const user of users) {
+            user.selections = user.selections.map(selection => getUpdatedSelectionByChanges(
+                editor,
+                changePackage.changes,
+                selection
+            ));
+
+            createCustomCursor(editor, { selections: user.selections, user });
+        }
     }
 }
 
+function updateUserIcons() {
+    users.textContent = "";
+    fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
+    for(const user of Object.values(allRoomUsers)) {
+        const div = document.createElement("div");
+        div.classList.toggle("inactive", user.cel === -1);
+        if (!user.username) user.username = user.userId.substring(0, 3);
+        div.textContent = user.username.substring(0, 15);
+        div.classList.add(`user-color-${user.color}`);
+        div.addEventListener("click", () => {
+            const fileData = files[user.key][user.filename];
+            if (!fileData) return;
+            if (currentFileName !== user.filename) displayFileData(fileData);
+            if (user.cel !== -1) user.scrollToCursor?.();
+        })
+        users.append(div);
+
+        const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
+        if (parentElem) {
+            
+            const span = document.createElement("span");
+            span.textContent = user.username;
+            span.classList.add("user-indicator", `user-color-${user.color}`)
+            parentElem.append(span);
+        }
+    }
+}
 
 function initLocalFileInfos(key, files) {
     for(const file of Object.values(files)) {
@@ -421,7 +521,7 @@ function initLocalFileInfos(key, files) {
         const cells = allUnappliedChanges[key + file.name];
         cells.unappliedFileChanges ??= [];
         for(const cell of file.data.cells) {
-            cells[cell.merge_id] ??= {unappliedChanges: []};
+            cells[cell.id] ??= {unappliedChanges: []};
         }
     }
 }
@@ -431,7 +531,7 @@ async function loadProjectFolder() {
     const reponse = await showDirectoryPicker({ id: "jupiter", mode: "readwrite" });
     const fileNames = {};
 
-    for await (const entry of reponse.values()) await recurseSubFiles(entry, fileTree, fileNames, "");
+    for await (const entry of reponse.values()) await recurseSubFiles(entry, fileNames, "");
 
     return fileNames;
 }
@@ -439,28 +539,22 @@ async function loadProjectFolder() {
 /**
  * @param {FileSystemDirectoryHandle} entry
  */
-async function recurseSubFiles(entry, parentUl, fileNames, path) {
-    if (entry.kind == "directory") await createDirectory(entry, parentUl, fileNames, path)
-    else if (entry.kind == "file") await createFile(entry, parentUl, fileNames, path);
+async function recurseSubFiles(entry, fileNames, path) {
+    if (entry.kind == "directory") await createDirectory(entry, fileNames, path)
+    else if (entry.kind == "file") await createFile(entry, fileNames, path);
 }
 
 /**
  * @param {FileSystemDirectoryHandle} directory
  */
-async function createDirectory(directory, parentUl, fileNames, path) {
+async function createDirectory(directory, fileNames, path) {
     if (directory.name == ".git") return;
     if (directory.name == "node_modules") return;
     if (directory.name == "venv") return;
     if (directory.name == ".idea") return;
 
-    const li = document.createElement("li");
-    li.textContent = directory.name;
-    const ul = document.createElement("ul");
-    li.append(ul);
-    parentUl.append(li);
-
     for await (const entry of directory.values()) {
-        await recurseSubFiles(entry, ul, fileNames, `${path}/${directory.name}`);
+        await recurseSubFiles(entry, fileNames, `${path}/${directory.name}`);
     }
 
 }
@@ -468,61 +562,63 @@ async function createDirectory(directory, parentUl, fileNames, path) {
 /**
  * @param {FileSystemFileHandle} file
  */
-async function createFile(file, parentUl, fileNames, path) {
+async function createFile(file, fileNames, path) {
     if (file.name.substring(file.name.length - 6) !== ".ipynb") return;
     const fileHandler = await file.getFile();
     const fileData = await fileHandler.text();
     const jsonData = JSON.parse(fileData);
-    let i = 0;
     for(const cell of jsonData.cells) {
         if (Array.isArray(cell.source)) cell.source = cell.source.join("");
-        cell.id = 0;
-        cell.merge_id = i++;
+        cell.custom_modifications = 0;
+        cell.id ??= generateRandomId();
     }
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
     allFileHandlers.push(fileNames[fileName]);
-    const li = document.createElement("li");
-    li.classList.add("file", "real");
-    li.textContent = file.name;
-    li.addEventListener("click", () => displayFileData(fileNames[fileName]));
-    parentUl.append(li);
 }
+
+const editors = [];
 
 function displayFileData(fileData) {
     notebook.textContent = "";
+    editors.length = 0;
     currentFileName = fileData.name;
-    currentKey = fileData.key;
+    document.querySelector("li.file.selected")?.classList.remove("selected");
+    document.querySelector(`li.file[file="${fileData.name}"]`)?.classList.add("selected");
+
+    socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
-    for (let i = 0; i < fileData.data.cells.length; i++) {
-        const cell = fileData.data.cells[i];
-        const cellContainer = createCellElement(fileData, cell);
-        notebook.append(cellContainer);
-        const textArea = cellContainer.querySelector("textarea")
-        setTimeout(() => updateTextAreaHeight(textArea), 100);
-        updateTextAreaHeight(textArea);
-        if(users.find(u => u.cel === cell.merge_id)) {
-            updateUserCaretElement({cel: cell.merge_id}, cell.source, i);
+    for (const cell of fileData.data.cells) {
+        addCellElement(cell, fileData);
+
+        let i = 0;
+        while (i < users.length) {
+            if (users[i].cel === cell.id) {
+                createCustomCursor(cell.editor, { ...users[i], user: users[i] });
+                users.splice(i, 1);
+            } else i++;
         }
     }
-    
 }
 
-function createCellElement(fileData, cellData) {
+function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem: notebook}) {
     const cellContainer = document.createElement("div");
-    cellContainer.classList.add("cell");
+    cellContainer.classList.add("notebook-cell");
 
     const typeSelection = document.createElement("select");
     typeSelection.addEventListener("change", () => {
         socket.emit("cellChange", {
             type: "changeType",
-            cel: cellData.merge_id,
+            cel: cell.id,
             filename: fileData.name,
             key: fileData.key,
             newType: typeSelection.value
         });
-    })
+
+        changeEditorLanguage(cell.editor, typeSelection.value);
+    });
+
     const markdownOption = document.createElement("option");
     markdownOption.value = "markdown";
     markdownOption.textContent = "Markdown";
@@ -530,57 +626,143 @@ function createCellElement(fileData, cellData) {
     codeOption.value = "code";
     codeOption.textContent = "Code";
     typeSelection.append(markdownOption, codeOption);
-    typeSelection.value = cellData.cell_type;
+    typeSelection.value = cell.cell_type;
 
     const buttonContainer = document.createElement("div");
-    buttonContainer.classList.add("buttonContainer");
+    buttonContainer.classList.add("button-container");
     const upButton = document.createElement("button");
     upButton.textContent = "Up";
     upButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveUp", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
     const downButton = document.createElement("button");
     downButton.textContent = "Down";
     downButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveDown", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
 
     const addButton = document.createElement("button");
     addButton.textContent = "Add";
     addButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "add", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "add", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "Delete";
     deleteButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "delete", cel: cellData.merge_id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", {type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key});
     });
     buttonContainer.append(upButton, downButton, addButton, deleteButton);
-     
-    const textareaContainer = document.createElement("div");
-    textareaContainer.classList.add("textContainer");
-    const pre = document.createElement("pre");
-    pre.classList.add("userCarets");
-    const textarea = createTextArea(cellData.merge_id, fileData);
-    textarea.value = cellData.source;
-    textareaContainer.append(pre, textarea);
+
+    function addElementToDom(cellDomPosition, cellElement) {
+        if (cellDomPosition.type === "append") cellDomPosition.elem.append(cellElement);
+        if (cellDomPosition.type === "prepend") cellDomPosition.elem.prepend(cellElement);
+        if (cellDomPosition.type === "after") cellDomPosition.elem.after(cellElement);
+        if (cellDomPosition.type === "before") cellDomPosition.elem.before(cellElement);
+    }
     
+    if (cell.editor) {
+        cellContainer.append(typeSelection, cell.editor.getContainerDomNode(), buttonContainer);
+        addElementToDom(cellDomPosition, cellContainer);
+        resizeAllEditors();
+    } else {
+        const editorContainer = document.createElement("div");
+        editorContainer.classList.add("editor-container");
+        cellContainer.append(typeSelection, editorContainer, buttonContainer);
+        addElementToDom(cellDomPosition, cellContainer);
 
-    let textBeforeInput = "";
-    textarea.addEventListener("beforeinput", _ => {
-        textBeforeInput = textarea.value;
-    })
-    textarea.addEventListener("input", _ => {
-        changeInsideCell(fileData.key, fileData.name, cellData.merge_id, textBeforeInput, textarea.value)
-        updateTextAreaHeight(textarea);
-        updateCodeHighlight(cellContainer);
-    })
+        editorContainer.addEventListener("wheel", e => {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+        }, {capture: true});
 
-    cellContainer.append(typeSelection, textareaContainer, buttonContainer);
-    updateCodeHighlight(cellContainer);
-    updateOutputFromCellElem(cellContainer, cellData);
+        const editor = monaco.editor.create(editorContainer, {
+            value: cell.source,
+            language: cell.cell_type === "code" ? "python" : "markdown",
+            theme: "vs-dark",
+            scrollBeyondLastLine: false,
+            wordWrap: true,
+            minimap: {
+                enabled: false
+            },
+            hover: {
+                enabled: false
+            },
+            padding: {
+                top: 10,
+                bottom: 10
+            }
+        });
 
-    return cellContainer;
+        editor.onDidChangeModelContent(changes => {
+            console.info("onDidChangeModelContent");
+
+            if(changes.isFlush) return;
+
+            changeInsideCell2(fileData.key, fileData.name, cell.id, changes)
+        });
+
+        editor.onDidChangeCursorSelection(selection => {
+            console.info("onDidChangeCursorSelection", selection.reason);
+            
+            // const cursorElement = editorContainer.querySelector(".cursor-primary") || editorContainer.querySelector(".cursor");
+            // cursorElement?.scrollIntoViewIfNeeded();
+
+            if (selection.reason === 1) return
+
+            const selections = editor.getSelections();
+
+            socket.emit("caretUpdate", {
+                selections,
+                cel: cell.id,
+                key: fileData.key,
+                filename: fileData.name,
+                username: username.value
+            });
+        });
+
+        editor.onDidFocusEditorText(() => {
+            currentCelId = cell.id;
+        });
+
+        editor.onDidBlurEditorText(() => {
+            editor.setSelection({
+                positionColumn: 0,
+                positionLineNumber: 0,
+                selectionStartColumn: 0,
+                selectionStartLineNumber: 0,
+            });
+            currentCelId = -1;
+            socket.emit("caretUpdate", {
+                cel: -1,
+                key: fileData.key,
+                filename: fileData.name,
+                username: username.value
+            });
+        });
+
+        editor.onDidContentSizeChange(() => {
+            editor.layout({
+                width: editorContainer.clientWidth,
+                height: editor.getContentHeight()
+            });
+        })
+
+        cell.editor = editor;
+    }
+
+    updateOutputFromCellElem(cellContainer, cell);
+    
+    editors.push(cell.editor);
+
+    // const cellContainer = createCellElement(fileData, cell);
+    // notebook.append(cellContainer);
+    // // const textArea = cellContainer.querySelector("textarea")
+    // // setTimeout(() => updateTextAreaHeight(textArea), 100);
+    // // updateTextAreaHeight(textArea);
+
+    // if(users.find(u => u.cel === cell.id)) {
+    //     updateUserCaretElement({cel: cell.id}, cell.source, i);
+    // }
 }
 
 function updateOutputFromCellElem(cellElement, cellData) {
@@ -623,89 +805,11 @@ function updateOutputFromCellElem(cellElement, cellData) {
     }
 }
 
-function updateCodeHighlight(cellElement) {
-    const selection = cellElement.querySelector("select");
-    const textarea = cellElement.querySelector("textarea");
-    const textContainer = cellElement.querySelector(".textContainer");
-    cellElement.querySelector(".highlight")?.remove();
-    
-
-    if (selection.value === "code") {
-        const codeHighlightPre = document.createElement("pre");
-        codeHighlightPre.classList.add("highlight");
-        const codeHighlightCode = document.createElement("code");
-        codeHighlightCode.classList.add("language-python");
-        codeHighlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.python, "python");
-        codeHighlightPre.append(codeHighlightCode);
-        textarea.parentElement.prepend(codeHighlightPre);
-        textContainer.classList.add("colorHighlight");
-    } else {
-        textContainer.classList.remove("colorHighlight");
-    }
-}
-
 function updateTextAreaHeight(textarea) {
     textarea.style.height = "0px";
     textarea.style.height = textarea.scrollHeight + 2 + "px";
 }
 
-function createTextArea(cellId, fileData) {
-    const textarea = document.createElement("textarea");
-
-    textarea.setAttribute("contenteditable", true);
-    textarea.setAttribute("spellcheck", false);
-
-    textarea.addEventListener("focus", focus, {once: true});
-    let interval = null;
-
-    function focus() {
-        currentCelId = cellId;
-        selectionStart = -1;
-        selectionEnd = -1;
-
-        interval = setInterval(checkcaret, 100);
-        textarea.addEventListener("blur", blur, {once: true});
-    }
-
-    function blur() {
-        clearInterval(interval);
-        if (document.activeElement.tagName !== "TEXTAREA") {
-            socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
-        }
-        textarea.addEventListener("focus", focus, {once: true});
-    }
-
-    function checkcaret() {
-        if (currentCelId !== cellId) return;
-        const caretHasMoved = (
-            selectionDirection != textarea.selectionDirection ||
-            selectionStart != textarea.selectionStart ||
-            selectionEnd != textarea.selectionEnd
-        );
-        
-        selectionStart = textarea.selectionStart;
-        selectionEnd = textarea.selectionEnd;
-        selectionDirection = textarea.selectionDirection;
-        
-        if (!caretHasMoved) return;
-
-        socket.emit("caretUpdate", {
-            selectionStart,
-            selectionEnd,
-            selectionDirection,
-            cel: cellId,
-            key: fileData.key,
-            filename: fileData.name,
-            username: username.value
-        });
-    }
-
-    return textarea
-}
-
-/**
- * Returns json copy of a file without outputs or other useless data so save space from server.
- */
 function jsonDataCopyForServer(filesData) {
     const clone = structuredClone(filesData);
     for (const fileData of Object.values(clone)) {
@@ -722,11 +826,6 @@ function jsonDataCopyForServer(filesData) {
     return clone;
 }
 
-
-/**
- * Returns json copy of a file without row id numbers.
- * Row id numbers are only used to sync the file with the server, end will break the file if keps
- */
 async function writeJsonDataToUserFile(fileData) {
     if(!fileData.handler) {
         fileData.handler = await showSaveFilePicker();
@@ -735,48 +834,33 @@ async function writeJsonDataToUserFile(fileData) {
         allFileHandlers.push(fileData);
     }
 
+    const clone = {
+        ...fileData.data,
+        cells: fileData.data.cells.map(({ custom_modifications, editor, ...cell }) => {
+            return {
+                ...cell,
+                source: formatSource(cell.source)
+            };
+        })
+    };
 
-
-    const clone = structuredClone(fileData.data);
-    for(const cell of clone.cells) {
-        cell.source = cell.source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n");
-        if (cell.source.length <= 1) cell.source = cell.source.join("");
-        cell.last_id = cell.id;
-        delete cell.id;
+    function formatSource(source) {
+        if (source.length === 0) return [];
+        return source.split("\n").map((v, i, arr) => i === arr.length - 1 ? v : v + "\n")
     }
+
     const stream = await fileData.handler.createWritable();
-    await stream.write(JSON.stringify(clone, null, 2));
+    await stream.write(JSON.stringify(clone, null, 1));
     const file = await fileData.handler.getFile();
     fileData.lastModified = file.lastModified;
     await stream.close();
 }
 
-/**
- * Test if file has changes.
- * If file has changes detect every changed row and send the changes to server which will update 
- * the local files variable.
- * This function also updates the outputs in each cell of the local files variable
- */
-function parseFileChanges(fileData) {
-    
-}
-
-// setInterval(() => {
-//     if(document.activeElement?.tagName === "TEXTAREA") {
-//         const text = document.activeElement.value;
-//         // console.log(files[123]["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"])
-//         if (!files[123]?.["/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb"].handler) {
-//             return;
-//         }
-//         changeInsideCell(123, "/Linear_and_Logistic_Regression/Linear_and_logistic_regression.ipynb", 0, text, text + "a")
-//     }
-// }, 100)
-
 function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     if (beforeEditText === editedText) return;
 
-    const cell = files[key][filename].data.cells.find(v => v.merge_id === cellId);
-    const change = {key, cel: cellId, filename, id: cell.id};
+    const cell = files[key][filename].data.cells.find(v => v.id === cellId);
+    const change = {key, cel: cellId, filename, custom_modifications: cell.custom_modifications};
     const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
 
     let firstUnchangedChar = -1;
@@ -819,7 +903,7 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     // console.log(JSON.stringify(change, (key, val) => {
     //     if (key === "filename") return undefined;
     //     if (key === "cel") return undefined;
-    //     if (key === "id") return undefined;
+    //     if (key === "custom_modifications") return undefined;
     //     if (key === "key") return undefined;
     //     return val;
     // }));
@@ -845,6 +929,53 @@ function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
     
     socket.emit("changeFile", revertedChange);
 }
+
+function changeInsideCell2(key, filename, cellId, vscodeChanges) {
+    const cell = files[key][filename].data.cells.find(v => v.id === cellId);
+    const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
+
+   
+    
+    const changes = vscodeChanges.changes.map(change => {
+        return {
+            start: change.rangeOffset,
+            end: change.rangeOffset + change.rangeLength,
+            data: change.text
+        };
+        // changeBase.start = change.rangeOffset;
+        // changeBase.end = change.rangeOffset + change.rangeLength;
+        // changeBase.data = 
+    });
+
+    const advancedClone = structuredClone(unappliedChanges.map(v => v.changes).flat());
+    for(let i = 1; i < advancedClone.length; i++) {
+        for(let j = 0; j < i; j++) {
+            // console.log(advancedClone, advancedClone[j], advancedClone[i])
+            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
+        }
+    }
+
+    advancedClone.forEach(change => {
+        delete change.stop;
+        delete change.replaceEnd;
+    });
+
+    let revertedChanges = structuredClone(changes);
+    for(let i = advancedClone.length - 1; i >= 0; i--) {
+        for(let j = 0; j < revertedChanges.length; j++) {
+            revertedChanges[j] = revertChangeBackward(advancedClone[i], revertedChanges[j]);
+        }
+    }
+
+    const changePackage = {key, cel: cellId, filename, custom_modifications: cell.custom_modifications, changes: revertedChanges};
+
+    unappliedChanges.push(changePackage);
+    
+    socket.emit("changeFile", changePackage);
+}
+
+
+
 function advanceChangeForward(oldChange, change) {
     const clone = structuredClone(change);
     const oldDelta = oldChange.end - oldChange.start;
@@ -940,39 +1071,41 @@ function revertChangeBackward(oldChange, change) {
     return clone
 }
 
-function changeTextarea(rootChanges) {
+function changeEditorText(editor, source, rootChangesPackages) {
     // console.log("Change pre element", rootChanges);
 
-    const advancedClone = structuredClone(rootChanges);
+    const advancedClone = structuredClone(rootChangesPackages.map(rootPackage => rootPackage.changes).flat());
     for(let i = 1; i < advancedClone.length; i++) {
         for(let j = 0; j < i; j++) {
             advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
         }
     }
 
-    let newText = null;
-    let cellNum = -1;
+    if (rootChangesPackages[0]?.filename !== currentFileName) return;
+
     for(const change of advancedClone) {
-        if (currentFileName !== change.filename) return;
-        if(newText === null) {
-            const fileData = files[change.key][change.filename];
-            cellNum = fileData.data.cells.findIndex(v => v.merge_id === change.cel);
-            newText = fileData.data.cells[cellNum].source;
-        }
-        newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);
+        // if(newText === null) {
+        //     const fileData = files[change.key][change.filename];
+        //     cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
+        //     newText = fileData.data.cells[cellNum].source;
+        // }
+        source = source.substring(0, change.start) + change.data + source.substring(change.end);
     }
 
-    if(cellNum === -1) return;
-    const textarea = notebook.querySelectorAll("textarea")[cellNum];
-    const selectionStart = textarea.selectionStart;
-    const selectionEnd = textarea.selectionEnd;
-    const selectionDirection = textarea.selectionDirection;
-    textarea.value = newText;
-    textarea.selectionStart = selectionStart;
-    textarea.selectionEnd = selectionEnd;
-    textarea.selectionDirection = selectionDirection;
-    updateTextAreaHeight(textarea);
-    updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
+    // if(cellNum === -1) return;
+    // const textarea = notebook.querySelectorAll("textarea")[cellNum];
+    // const selectionStart = textarea.selectionStart;
+    // const selectionEnd = textarea.selectionEnd;
+    // const selectionDirection = textarea.selectionDirection;
+    // textarea.value = newText;
+    const selection = editor.getSelections();
+    editor.setValue(source);
+    editor.setSelections(selection);
+    // textarea.selectionStart = selectionStart;
+    // textarea.selectionEnd = selectionEnd;
+    // textarea.selectionDirection = selectionDirection;
+    // updateTextAreaHeight(textarea);
+    // updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
 }
 
 (() => {
@@ -1255,7 +1388,7 @@ function changeTextarea(rootChanges) {
             console.log("Right: ", advancedChanges);
         } else console.log("%cAdvanced passed", "background: green;color:white");
     }
-})();
+});
 
 Object.assign(globalThis.String.prototype, {
     str: function(change) {
