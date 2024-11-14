@@ -13,8 +13,8 @@ const router = express.Router();
 // router.patch("/:id", weakAuthentication, postController.updatePost);
 // router.delete("/:id", weakAuthentication, postController.deletePost);
 
-router.post("/host-all", fileController.hostFiles);
-router.get("/loaded/:key", fileController.getFiles);
+router.post("/host-files", fileController.hostFiles);
+router.post("/join-files", fileController.joinFiles);
 // router.put("/:id/dislike", weakAuthentication, postController.dislikePost);
 // router.patch("/:id/reply", weakAuthentication, postController.replyToPost);
 

@@ -1,16 +1,22 @@
-const {hostedFiles, hostingUsers} = require("../controllers/fileRouter");
+const {hostedFiles, roomUsers, users} = require("../controllers/fileRouter");
 const {socketIO} = require("../app")
 
 const socketConnection = (socket) => {
 	console.log(`⚡: ${socket.id} user just connected!`);
+    users[socket.id] = null;
 
-	socket.on("disconnect", () => {
-		console.log(`🔥: A user ${socket.id} disconnected`);
-		if (hostingUsers[socket.id]) {
-			delete hostedFiles[hostingUsers[socket.id]];
-		}
-		delete hostingUsers[socket.id];
-	});
+    socket.on("disconnect", () => {
+        console.log(`🔥: A user ${socket.id} disconnected`);
+        const key = users[socket.id];
+        roomUsers[key] = roomUsers[key]?.filter(user => user.id != socket.id) ?? [];
+        delete users[socket.id];
+        const socketKey = `userDisconnect${key}`;
+        socket.broadcast.emit(socketKey, { key, userId: socket.id });
+
+        if (roomUsers[key]?.length === 0) {
+            delete hostedFiles[key];
+        }
+    });
 
 	socket.on("lag", _ => {
 		const date = new Date();
@@ -25,7 +31,11 @@ const socketConnection = (socket) => {
 		try {
             if (!(caret.key in hostedFiles)) throw new Error("Invalid key");
             const socketKey = `caretUpdate${caret.key}`;
-            socket.broadcast.emit(socketKey, {...caret, userId: socket.id});
+            const user = roomUsers[caret.key].find(user => user.id == socket.id);
+            if (!user) throw new Error("User not found");
+            user.caret = caret;
+
+            socket.broadcast.emit(socketKey, {...caret, userId: socket.id, color: user.color});
 		} catch (e) {
 			console.error(e)
 		}

@@ -1,6 +1,5 @@
 import socketIO from "socket.io-client";
 import {api} from "./api";
-// import Prism from "./prism";
 import * as monaco from 'monaco-editor';
 import {createCustomCursor} from "./customCursor";
 
@@ -26,47 +25,7 @@ editorContainer.addEventListener("wheel", e => {
     e.stopImmediatePropagation();
 }, {capture: true});
 
-// Initialize the Monaco Editor
-const editor1 = monaco.editor.create(editorContainer, {
-    value: `// Sample code\nfunction hello() {\n  console.log("Hello, world!");\n}`,
-    language: "javascript", // Set the language to JavaScript
-    theme: "vs-dark",        // Set the editor theme
-    scrollBeyondLastLine: false,
-    // scrollbar: {
-    //     vertical: "hidden",
-    //     horizontal: "hidden",
-    // },
-    wordWrap: true,
-    minimap: {
-        enabled: false
-    },
-    hover: {
-        enabled: false
-    },
-    padding: {
-        top: 10,
-        bottom: 10
-    }
-});
-
-
-// setInterval(e => {
-//     // console.log(editor1.getSelection());
-
-
-//     editor1.setValue(`# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`)
-
-// }, 2000);
-
-
-window.addEventListener("resize", () => {
-    editor1.layout({
-        width: editorContainer.clientWidth,
-        height: editor1.getScrollHeight()
-    });
-
-    resizeAllEditors();
-});
+window.addEventListener("resize", () => resizeAllEditors());
 
 function resizeAllEditors() {
     editors.forEach(editor => {
@@ -78,167 +37,11 @@ function resizeAllEditors() {
 }
 
 
-
-console.log(editor1.getValue());
-
-editor1.onDidChangeCursorSelection(e => {
-    console.log("cursor", e);
-})
-
-editor1.onDidChangeModelContent(event => {
-    console.log("change content", event);
-    
-});
-
-editor1.onDidFocusEditorText(event => {
-    console.log("Focus");
-
-    changeEditorLanguage("javascript")
-})
-
-editor1.onDidBlurEditorText(event => {
-    console.log("Blur")
-    // editor1.setSelection({
-    //     endColumn: 0, 
-    //     endLineNumber: 0, 
-    //     positionColumn: 0, 
-    //     positionLineNumber: 0,
-    //     selectionStartColumn: 0,
-    //     selectionStartLineNumber: 0,
-    //     startColumn: 0,
-    //     startLineNumber: 0
-    // });
-
-    // Inser new row
-    // insertText(
-    //     `# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`,
-    //     {
-    //         startLineNumber: 0,
-    //         startColumn: 0,
-    //         endLineNumber: 0,
-    //         endColumn: 0
-    //     },
-    //     true,
-    // )
-
-    // changeEditorLanguage("markdown")
-
-    // Replace hello
-    // insertText(
-    //     `kassu11`,
-    //     {
-    //         startLineNumber: 2,
-    //         startColumn: 5,
-    //         endLineNumber: 2,
-    //         endColumn: 10
-    //     },
-    // )
-
-    // addCustomSelections(selections);
-
-
-    // editor1.setValue(`# Write your code here\ndef hello() {\n  print("Hello, world!");\n}`)
-});
-
 function changeEditorLanguage(editor, language) {
     const model = editor.getModel();
     if (language === "markdown") monaco.editor.setModelLanguage(model, language);
     else if (language === "code") monaco.editor.setModelLanguage(model, "python");
 }
-
-
-
-// function insertText(text, position, addToHistory = true) {
-//     editor1.pushUndoStop();
-//     editor1.executeEdits(
-//         null, // Optional: source of the edit, can be `null`
-//         [
-//             {
-//                 range: new monaco.Range(position.startLineNumber, position.startColumn, position.endLineNumber, position.endColumn),
-//                 text: text,
-//                 forceMoveMarkers: true // Keeps markers (like selections) in place
-//             }
-//         ],
-//     );
-
-//     editor1.popUndoStop();
-
-// }
-
-// Function to create and apply custom selections
-// let lastDecoration = null;
-// function addCustomSelections(selections) {
-//     // Define decorations based on the selections
-//     const decorations = selections.map(selection => ({
-//         range: new monaco.Range(
-//             selection.startLineNumber,
-//             selection.startColumn,
-//             selection.endLineNumber,
-//             selection.endColumn
-//         ),
-//         options: {
-//             className: `user-selection-${selection.userId}`, // CSS class to style this selection
-//             isWholeLine: false,
-//             // after: {
-//             //     content: "after",
-//             //     inlineClassName: "afterDec",
-//             //     inlineClassNameAffectsLetterSpacing: true
-//             // },
-//             // before: {
-//             //     content: "before",
-//             //     inlineClassName: "afterDec",
-//             //     inlineClassNameAffectsLetterSpacing: true
-//             // }
-//         }
-//     }));
-
-//     // Apply decorations
-//     // editor1.removeDecorations([1, 2, 3]);
-//     lastDecoration?.clear();
-//     lastDecoration = editor1.createDecorationsCollection(decorations);
-// }
-
-
-editor1.onDidContentSizeChange(() => {
-    editor1.layout({
-        width: editorContainer.clientWidth,
-        height: editor1.getContentHeight()
-    });
-})
-
-const selections2 = {
-    selections: [{
-        positionColumn: 18,
-        positionLineNumber: 2,
-        selectionStartColumn: 6,
-        selectionStartLineNumber: 1,
-    }],
-    user: {
-        username: "kassu11",
-        userId: 1,
-    }
-};
-
-
-createCustomCursor(editor1, selections2)
-
-// class CustomCursor {
-//     constructor() {
-
-//     }
-
-//     remove() {
-
-//     }
-
-//     refresh() {
-
-//     }
-
-//     update() {
-
-//     }
-// }
 
 
 const files = {};
@@ -266,6 +69,7 @@ window.addEventListener("resize", () => {
 
 username.addEventListener("input", () => {
     if (!currentKey.length) return;
+
     socket.emit("caretUpdate", {
         cel: currentCelId,
         key: currentKey,
@@ -366,34 +170,61 @@ host.addEventListener("click", async () => {
     }
     const key = prompt("Set custom room key");
     const filesData = await loadProjectFolder();
-    files[key] = filesData;
 
     for(const value of Object.values(filesData)) {
         value.key = key;
     }
 
-    await api.hostFiles({
+    const response = await api.hostFiles({
         fileData: jsonDataCopyForServer(filesData), 
         key, 
         id: socket.id
     });
 
+    if (response.status !== 200) return alert(response.message);
+
+    files[key] = filesData;
+    currentKey = key;
+
+    generateFileTree(filesData);
     initLocalFileInfos(key, filesData);
     socketJoin(key);
 });
 
-join.addEventListener("click", async e => {
+join.addEventListener("click", async () => {
     if (socket.id == null) return alert("Server is not yet open, try again");
     const roomKey = prompt("Enter room key");
 
-    const fetchedFiles = await api.getLoadedFiles({key: roomKey});
+    const fetchedFiles = await api.getLoadedFiles({key: roomKey, id: socket.id});
+
+    if (fetchedFiles.status !== 200) return alert(fetchedFiles.message);
+
     files[roomKey] = fetchedFiles.files;
     for(const value of Object.values(fetchedFiles.files)) {
         value.key = roomKey;
     }
-    const fileTreeObject = {};
 
-    for(const file of Object.values(fetchedFiles.files)) {
+    socket.emit("caretUpdate", { cel: -1, key: roomKey, username: username.value });
+
+    fetchedFiles.users?.forEach(user => {
+        if (user.id == socket.id) return;
+        allRoomUsers[user.id] = user.caret ?? { cel: -1 }
+        allRoomUsers[user.id].userId = user.id;
+        allRoomUsers[user.id].color = user.color;
+    });
+
+    updateUserIcons();
+
+    currentKey = roomKey;
+    generateFileTree(fetchedFiles.files);
+    initLocalFileInfos(roomKey, fetchedFiles.files);
+    socketJoin(roomKey);
+});
+
+function generateFileTree(fileData) {
+    const fileTreeObject = {};
+    
+    for(const file of Object.values(fileData)) {
         let curr = fileTreeObject;
         file.name.substring(1).split("/").forEach((n, i, arr) => {
             curr[n] ??= {};
@@ -413,7 +244,7 @@ join.addEventListener("click", async e => {
                 li.textContent = key;
                 li.classList.add("file");
                 parentUl.append(li);
-                li.addEventListener("click", () => displayFileData(files[roomKey][value.fullFileName]));
+                li.addEventListener("click", () => displayFileData(fileData[value.fullFileName]));
             } else {
                 const li = document.createElement("li");
                 li.textContent = key;
@@ -426,15 +257,17 @@ join.addEventListener("click", async e => {
     }
 
     recursiveFoldering(Object.entries(fileTreeObject), fileTree);
-
-    initLocalFileInfos(roomKey, fetchedFiles.files);
-    socketJoin(roomKey);
-});
+}
 
 function socketJoin(key) {
-    socket.on(`caretUpdate${key}`, caretUpdate);
-    function caretUpdate(selectionPackage) {
-        const curIndex = files[key][selectionPackage.filename].data.cells.findIndex(row => row.id === selectionPackage.cel);
+    socket.on(`userDisconnect${key}`, userData => {
+        allRoomUsers[userData.userId]?.clearCursor?.();
+        delete allRoomUsers[userData.userId];
+        updateUserIcons();
+    })
+
+    socket.on(`caretUpdate${key}`, selectionPackage => {
+        const curIndex = files[key][selectionPackage.filename]?.data.cells.findIndex(row => row.id === selectionPackage.cel);
         const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
 
         if(editor) {
@@ -443,44 +276,16 @@ function socketJoin(key) {
 
         const oldCarets = allRoomUsers[selectionPackage.userId];
         if (oldCarets) allRoomUsers[selectionPackage.userId] = {...oldCarets, ...selectionPackage};
-        else {
-            selectionPackage.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
-            allRoomUsers[selectionPackage.userId] = selectionPackage;
-        }
-        
-        users.textContent = "";
-        fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
-        for(const user of Object.values(allRoomUsers)) {
-            const div = document.createElement("div");
-            div.classList.toggle("inactive", user.cel === -1);
-            if (!user.username) user.username = user.userId.substring(0, 3);
-            div.textContent = user.username.substring(0, 15);
-            div.style.background = user.color;
-            div.addEventListener("click", () => {
-                const fileData = files[user.key][user.filename];
-                if (!fileData) return;
-                if (currentFileName !== user.filename) displayFileData(fileData);
-                if (user.cel !== -1) user.scrollToCursor?.();
-            })
-            users.append(div);
+        else allRoomUsers[selectionPackage.userId] = selectionPackage;
 
-            const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
-            if (parentElem) {
-                const span = document.createElement("span");
-                span.textContent = user.username;
-                span.style.background = user.color;
-                span.classList.add("user-indicator")
-                parentElem.append(span);
-            }
-        }
-
+        updateUserIcons();
 
         if (curIndex === -1) return allRoomUsers[selectionPackage.userId]?.clearCursor?.();
         if (currentFileName !== selectionPackage.filename) return;
         
         if (selectionPackage.selections) createCustomCursor(editor, {...selectionPackage, user: allRoomUsers[selectionPackage.userId]});
         else allRoomUsers[selectionPackage.userId]?.clearCursor?.();
-    }
+    });
 
     socket.on(`cellChange${key}`, change => {
         const unappliedChanges = allUnappliedChanges[key + change.filename]
@@ -504,7 +309,6 @@ function socketJoin(key) {
             fileData.data.cells.splice(cellIndex + 1, 0, change.data);
             initLocalFileInfos(key, [fileData]);
             if (fileActive) {
-                console.log(change.data);
                 const parentElem = document.querySelectorAll(".notebook-cell")[cellIndex];
                 addCellElement(change.data, fileData, {type: "after", elem: parentElem});
             }
@@ -683,6 +487,34 @@ function socketJoin(key) {
     }
 }
 
+function updateUserIcons() {
+    users.textContent = "";
+    fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
+    for(const user of Object.values(allRoomUsers)) {
+        const div = document.createElement("div");
+        div.classList.toggle("inactive", user.cel === -1);
+        if (!user.username) user.username = user.userId.substring(0, 3);
+        div.textContent = user.username.substring(0, 15);
+        div.classList.add(`user-color-${user.color}`);
+        div.addEventListener("click", () => {
+            const fileData = files[user.key][user.filename];
+            if (!fileData) return;
+            if (currentFileName !== user.filename) displayFileData(fileData);
+            if (user.cel !== -1) user.scrollToCursor?.();
+        })
+        users.append(div);
+
+        const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
+        if (parentElem) {
+            
+            const span = document.createElement("span");
+            span.textContent = user.username;
+            span.classList.add("user-indicator", `user-color-${user.color}`)
+            parentElem.append(span);
+        }
+    }
+}
+
 function initLocalFileInfos(key, files) {
     for(const file of Object.values(files)) {
         allUnappliedChanges[key + file.name] ??= {};
@@ -699,7 +531,7 @@ async function loadProjectFolder() {
     const reponse = await showDirectoryPicker({ id: "jupiter", mode: "readwrite" });
     const fileNames = {};
 
-    for await (const entry of reponse.values()) await recurseSubFiles(entry, fileTree, fileNames, "");
+    for await (const entry of reponse.values()) await recurseSubFiles(entry, fileNames, "");
 
     return fileNames;
 }
@@ -707,28 +539,22 @@ async function loadProjectFolder() {
 /**
  * @param {FileSystemDirectoryHandle} entry
  */
-async function recurseSubFiles(entry, parentUl, fileNames, path) {
-    if (entry.kind == "directory") await createDirectory(entry, parentUl, fileNames, path)
-    else if (entry.kind == "file") await createFile(entry, parentUl, fileNames, path);
+async function recurseSubFiles(entry, fileNames, path) {
+    if (entry.kind == "directory") await createDirectory(entry, fileNames, path)
+    else if (entry.kind == "file") await createFile(entry, fileNames, path);
 }
 
 /**
  * @param {FileSystemDirectoryHandle} directory
  */
-async function createDirectory(directory, parentUl, fileNames, path) {
+async function createDirectory(directory, fileNames, path) {
     if (directory.name == ".git") return;
     if (directory.name == "node_modules") return;
     if (directory.name == "venv") return;
     if (directory.name == ".idea") return;
 
-    const li = document.createElement("li");
-    li.textContent = directory.name;
-    const ul = document.createElement("ul");
-    li.append(ul);
-    parentUl.append(li);
-
     for await (const entry of directory.values()) {
-        await recurseSubFiles(entry, ul, fileNames, `${path}/${directory.name}`);
+        await recurseSubFiles(entry, fileNames, `${path}/${directory.name}`);
     }
 
 }
@@ -736,7 +562,7 @@ async function createDirectory(directory, parentUl, fileNames, path) {
 /**
  * @param {FileSystemFileHandle} file
  */
-async function createFile(file, parentUl, fileNames, path) {
+async function createFile(file, fileNames, path) {
     if (file.name.substring(file.name.length - 6) !== ".ipynb") return;
     const fileHandler = await file.getFile();
     const fileData = await fileHandler.text();
@@ -749,12 +575,6 @@ async function createFile(file, parentUl, fileNames, path) {
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
     allFileHandlers.push(fileNames[fileName]);
-    const li = document.createElement("li");
-    li.setAttribute("file", fileName);
-    li.classList.add("file", "real");
-    li.textContent = file.name;
-    li.addEventListener("click", () => displayFileData(fileNames[fileName]));
-    parentUl.append(li);
 }
 
 const editors = [];
@@ -763,9 +583,10 @@ function displayFileData(fileData) {
     notebook.textContent = "";
     editors.length = 0;
     currentFileName = fileData.name;
-    currentKey = fileData.key;
     document.querySelector("li.file.selected")?.classList.remove("selected");
     document.querySelector(`li.file[file="${fileData.name}"]`)?.classList.add("selected");
+
+    socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
     for (const cell of fileData.data.cells) {
@@ -984,92 +805,11 @@ function updateOutputFromCellElem(cellElement, cellData) {
     }
 }
 
-function updateCodeHighlight(cellElement) {
-    return;
-
-    // TODO: Remove
-    const selection = cellElement.querySelector("select");
-    const textarea = cellElement.querySelector("textarea");
-    const textContainer = cellElement.querySelector(".textContainer");
-    cellElement.querySelector(".highlight")?.remove();
-    
-
-    if (selection.value === "code") {
-        const codeHighlightPre = document.createElement("pre");
-        codeHighlightPre.classList.add("highlight");
-        const codeHighlightCode = document.createElement("code");
-        codeHighlightCode.classList.add("language-python");
-        codeHighlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.python, "python");
-        codeHighlightPre.append(codeHighlightCode);
-        textarea.parentElement.prepend(codeHighlightPre);
-        textContainer.classList.add("colorHighlight");
-    } else {
-        textContainer.classList.remove("colorHighlight");
-    }
-}
-
 function updateTextAreaHeight(textarea) {
     textarea.style.height = "0px";
     textarea.style.height = textarea.scrollHeight + 2 + "px";
 }
 
-function createTextArea(cellId, fileData) {
-    const textarea = document.createElement("textarea");
-
-    textarea.setAttribute("contenteditable", true);
-    textarea.setAttribute("spellcheck", false);
-
-    textarea.addEventListener("focus", focus, {once: true});
-    let interval = null;
-
-    function focus() {
-        currentCelId = cellId;
-        selectionStart = -1;
-        selectionEnd = -1;
-
-        interval = setInterval(checkcaret, 100);
-        textarea.addEventListener("blur", blur, {once: true});
-    }
-
-    function blur() {
-        clearInterval(interval);
-        if (document.activeElement.tagName !== "TEXTAREA") {
-            socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
-        }
-        textarea.addEventListener("focus", focus, {once: true});
-    }
-
-    function checkcaret() {
-        if (currentCelId !== cellId) return;
-        const caretHasMoved = (
-            selectionDirection != textarea.selectionDirection ||
-            selectionStart != textarea.selectionStart ||
-            selectionEnd != textarea.selectionEnd
-        );
-        
-        selectionStart = textarea.selectionStart;
-        selectionEnd = textarea.selectionEnd;
-        selectionDirection = textarea.selectionDirection;
-        
-        if (!caretHasMoved) return;
-
-        socket.emit("caretUpdate", {
-            selectionStart,
-            selectionEnd,
-            selectionDirection,
-            cel: cellId,
-            key: fileData.key,
-            filename: fileData.name,
-            username: username.value
-        });
-    }
-
-    return textarea
-}
-
-/**
- * Returns json copy of a file without outputs or other useless data so save space from server.
- */
 function jsonDataCopyForServer(filesData) {
     const clone = structuredClone(filesData);
     for (const fileData of Object.values(clone)) {
@@ -1094,7 +834,6 @@ async function writeJsonDataToUserFile(fileData) {
         allFileHandlers.push(fileData);
     }
 
-    console.log(fileData.data);
     const clone = {
         ...fileData.data,
         cells: fileData.data.cells.map(({ custom_modifications, editor, ...cell }) => {
@@ -1367,41 +1106,6 @@ function changeEditorText(editor, source, rootChangesPackages) {
     // textarea.selectionDirection = selectionDirection;
     // updateTextAreaHeight(textarea);
     // updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
-}
-
-function changeTextarea(rootChanges) {
-    // console.log("Change pre element", rootChanges);
-
-    const advancedClone = structuredClone(rootChanges);
-    for(let i = 1; i < advancedClone.length; i++) {
-        for(let j = 0; j < i; j++) {
-            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
-        }
-    }
-
-    let newText = null;
-    let cellNum = -1;
-    for(const change of advancedClone) {
-        if (currentFileName !== change.filename) return;
-        if(newText === null) {
-            const fileData = files[change.key][change.filename];
-            cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
-            newText = fileData.data.cells[cellNum].source;
-        }
-        newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);
-    }
-
-    if(cellNum === -1) return;
-    const textarea = notebook.querySelectorAll("textarea")[cellNum];
-    const selectionStart = textarea.selectionStart;
-    const selectionEnd = textarea.selectionEnd;
-    const selectionDirection = textarea.selectionDirection;
-    textarea.value = newText;
-    textarea.selectionStart = selectionStart;
-    textarea.selectionEnd = selectionEnd;
-    textarea.selectionDirection = selectionDirection;
-    updateTextAreaHeight(textarea);
-    updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
 }
 
 (() => {
@@ -1684,7 +1388,7 @@ function changeTextarea(rootChanges) {
             console.log("Right: ", advancedChanges);
         } else console.log("%cAdvanced passed", "background: green;color:white");
     }
-})();
+});
 
 Object.assign(globalThis.String.prototype, {
     str: function(change) {

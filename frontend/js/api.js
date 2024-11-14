@@ -1,34 +1,38 @@
 
 const baseURL = "https://jupiter-notebook-sharing.onrender.com/api/"
 export const api = {
-    hostLobby: async({key}) => {
-        const response = await fetch(baseURL + `lobby/host/${key}`, {
+    hostFiles: async ({ key, fileData, id }) => {
+        const response = await fetch(`${baseURL}files/host-files`, {
             method: "POST",
-            body: "",
-        });
-
-        return await response.json();
-    },
-    hostFiles: async({key, fileData, id}) => {
-        console.log(key, fileData, id);
-        const response = await fetch(baseURL + `files/host-all`, {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 key, fileData, id
             }),
         });
 
-        return await response.json();
-    },
-    getLoadedFiles: async({key}) => {
-        const response = await fetch(baseURL + `files/loaded/${key}`);
+        console.log(response);
 
-        return await response.json();
+        const json = await response.json();
+
+        return { ...json, status: response.status };
     },
-    getWelcomePage: async() => {
+    getLoadedFiles: async ({ key, id }) => {
+        const response = await fetch(`${baseURL}files/join-files`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                key, id
+            }),
+        });
+
+        const json = await response.json();
+
+        return { ...json, status: response.status };
+    },
+    getWelcomePage: async () => {
         const response = await fetch("https://jupiter-notebook-sharing.onrender.com/");
+        const json = await response.json();
 
-        return await response.json();
+        return { ...json, status: response.status };
     }
 }

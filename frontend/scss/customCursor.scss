@@ -1,8 +1,3 @@
-.user-color-1 {
-    --user-selection: hsla(240, 100%, 70%, 0.55);
-    --user-cursor: hsl(240, 100%, 70%);
-}
-
 .user-selection { background-color: var(--user-selection); }
 
 .fake-cursor {
@@ -26,8 +21,6 @@
         opacity: 1;
     }
 }
-
-
 
 @keyframes blink {
     0%, 50% {
