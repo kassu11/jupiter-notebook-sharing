@@ -73,21 +73,6 @@ body {
     overflow: hidden;
 }
 
-#editor-container { // TODO: remove
-    position: relative;
-    width: 100%;
-    min-width: 200px;
-    border-radius: 10px;
-}
-
-.afterDec {
-    background-color: red;
-    position: absolute;
-    pointer-events: none;
-    transform: translateY(-100%);
-    // opacity: .1;
-}
-
 .fileTreeContainer {
     position: relative;
     width: 300px;

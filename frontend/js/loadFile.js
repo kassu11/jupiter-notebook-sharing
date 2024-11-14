@@ -261,7 +261,6 @@ function generateFileTree(fileData) {
 
 function socketJoin(key) {
     socket.on(`userDisconnect${key}`, userData => {
-        console.log(userData);
         allRoomUsers[userData.userId]?.clearCursor?.();
         delete allRoomUsers[userData.userId];
         updateUserIcons();
@@ -310,7 +309,6 @@ function socketJoin(key) {
             fileData.data.cells.splice(cellIndex + 1, 0, change.data);
             initLocalFileInfos(key, [fileData]);
             if (fileActive) {
-                console.log(change.data);
                 const parentElem = document.querySelectorAll(".notebook-cell")[cellIndex];
                 addCellElement(change.data, fileData, {type: "after", elem: parentElem});
             }
@@ -492,9 +490,7 @@ function socketJoin(key) {
 function updateUserIcons() {
     users.textContent = "";
     fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
-    console.log(allRoomUsers);
     for(const user of Object.values(allRoomUsers)) {
-        console.log(user);
         const div = document.createElement("div");
         div.classList.toggle("inactive", user.cel === -1);
         if (!user.username) user.username = user.userId.substring(0, 3);
@@ -809,92 +805,11 @@ function updateOutputFromCellElem(cellElement, cellData) {
     }
 }
 
-function updateCodeHighlight(cellElement) {
-    return;
-
-    // TODO: Remove
-    const selection = cellElement.querySelector("select");
-    const textarea = cellElement.querySelector("textarea");
-    const textContainer = cellElement.querySelector(".textContainer");
-    cellElement.querySelector(".highlight")?.remove();
-    
-
-    if (selection.value === "code") {
-        const codeHighlightPre = document.createElement("pre");
-        codeHighlightPre.classList.add("highlight");
-        const codeHighlightCode = document.createElement("code");
-        codeHighlightCode.classList.add("language-python");
-        codeHighlightCode.innerHTML = Prism.highlight(textarea.value, Prism.languages.python, "python");
-        codeHighlightPre.append(codeHighlightCode);
-        textarea.parentElement.prepend(codeHighlightPre);
-        textContainer.classList.add("colorHighlight");
-    } else {
-        textContainer.classList.remove("colorHighlight");
-    }
-}
-
 function updateTextAreaHeight(textarea) {
     textarea.style.height = "0px";
     textarea.style.height = textarea.scrollHeight + 2 + "px";
 }
 
-function createTextArea(cellId, fileData) {
-    const textarea = document.createElement("textarea");
-
-    textarea.setAttribute("contenteditable", true);
-    textarea.setAttribute("spellcheck", false);
-
-    textarea.addEventListener("focus", focus, {once: true});
-    let interval = null;
-
-    function focus() {
-        currentCelId = cellId;
-        selectionStart = -1;
-        selectionEnd = -1;
-
-        interval = setInterval(checkcaret, 100);
-        textarea.addEventListener("blur", blur, {once: true});
-    }
-
-    function blur() {
-        clearInterval(interval);
-        if (document.activeElement.tagName !== "TEXTAREA") {
-            socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
-        }
-        textarea.addEventListener("focus", focus, {once: true});
-    }
-
-    function checkcaret() {
-        if (currentCelId !== cellId) return;
-        const caretHasMoved = (
-            selectionDirection != textarea.selectionDirection ||
-            selectionStart != textarea.selectionStart ||
-            selectionEnd != textarea.selectionEnd
-        );
-        
-        selectionStart = textarea.selectionStart;
-        selectionEnd = textarea.selectionEnd;
-        selectionDirection = textarea.selectionDirection;
-        
-        if (!caretHasMoved) return;
-
-        socket.emit("caretUpdate", {
-            selectionStart,
-            selectionEnd,
-            selectionDirection,
-            cel: cellId,
-            key: fileData.key,
-            filename: fileData.name,
-            username: username.value
-        });
-    }
-
-    return textarea
-}
-
-/**
- * Returns json copy of a file without outputs or other useless data so save space from server.
- */
 function jsonDataCopyForServer(filesData) {
     const clone = structuredClone(filesData);
     for (const fileData of Object.values(clone)) {
@@ -919,7 +834,6 @@ async function writeJsonDataToUserFile(fileData) {
         allFileHandlers.push(fileData);
     }
 
-    console.log(fileData.data);
     const clone = {
         ...fileData.data,
         cells: fileData.data.cells.map(({ custom_modifications, editor, ...cell }) => {
@@ -1192,41 +1106,6 @@ function changeEditorText(editor, source, rootChangesPackages) {
     // textarea.selectionDirection = selectionDirection;
     // updateTextAreaHeight(textarea);
     // updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
-}
-
-function changeTextarea(rootChanges) {
-    // console.log("Change pre element", rootChanges);
-
-    const advancedClone = structuredClone(rootChanges);
-    for(let i = 1; i < advancedClone.length; i++) {
-        for(let j = 0; j < i; j++) {
-            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
-        }
-    }
-
-    let newText = null;
-    let cellNum = -1;
-    for(const change of advancedClone) {
-        if (currentFileName !== change.filename) return;
-        if(newText === null) {
-            const fileData = files[change.key][change.filename];
-            cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
-            newText = fileData.data.cells[cellNum].source;
-        }
-        newText = newText.substring(0, change.start) + change.data + newText.substring(change.end);
-    }
-
-    if(cellNum === -1) return;
-    const textarea = notebook.querySelectorAll("textarea")[cellNum];
-    const selectionStart = textarea.selectionStart;
-    const selectionEnd = textarea.selectionEnd;
-    const selectionDirection = textarea.selectionDirection;
-    textarea.value = newText;
-    textarea.selectionStart = selectionStart;
-    textarea.selectionEnd = selectionEnd;
-    textarea.selectionDirection = selectionDirection;
-    updateTextAreaHeight(textarea);
-    updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
 }
 
 (() => {
@@ -1509,7 +1388,7 @@ function changeTextarea(rootChanges) {
             console.log("Right: ", advancedChanges);
         } else console.log("%cAdvanced passed", "background: green;color:white");
     }
-})();
+});
 
 Object.assign(globalThis.String.prototype, {
     str: function(change) {
