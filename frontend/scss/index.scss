@@ -53,6 +53,7 @@ body {
             opacity: 1;
             color: white;
             font-weight: 600;
+            background-color: var(--user-cursor); 
             cursor: pointer;
 
             &.inactive {
@@ -110,6 +111,9 @@ body {
         position: relative;
         display: inline-block;
         margin-left: 10px;
+        color: white;
+        padding-inline: 3px;
+        background-color: var(--user-cursor); 
     }
 
     li.file::marker {

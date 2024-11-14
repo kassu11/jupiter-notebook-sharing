@@ -21,7 +21,7 @@ export const createCustomCursor = (editor, { user, selections }) => {
                 Math.max(selection.positionColumn, selection.selectionStartColumn),
             ),
             options: {
-                className: `user-selection user-color-${1}`,
+                className: `user-selection user-color-${user.color}`,
             }
         }));
 
@@ -33,7 +33,7 @@ export const createCustomCursor = (editor, { user, selections }) => {
             selections.map(({ positionLineNumber: line, positionColumn: column }) => ({
                 range: new monaco.Range(line, column, line, column),
                 options: {
-                    className: `fake-cursor user-color-${1}`,
+                    className: `fake-cursor user-color-${user.color}`,
                 }
             }))
         );
@@ -58,7 +58,7 @@ export const createCustomCursor = (editor, { user, selections }) => {
                 getId: () => widgetId,
                 getDomNode: () => {
                     const domNode = document.createElement("div");
-                    domNode.classList.add("cursor-lable", `user-color-${1}`);
+                    domNode.classList.add("cursor-lable", `user-color-${user.color}`);
                     domNode.innerText = user.username;
                     return domNode;
                 },

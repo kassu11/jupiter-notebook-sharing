@@ -206,6 +206,15 @@ join.addEventListener("click", async () => {
 
     socket.emit("caretUpdate", { cel: -1, key: roomKey, username: username.value });
 
+    fetchedFiles.users?.forEach(user => {
+        if (user.id == socket.id) return;
+        allRoomUsers[user.id] = user.caret ?? { cel: -1 }
+        allRoomUsers[user.id].userId = user.id;
+        allRoomUsers[user.id].color = user.color;
+    });
+
+    updateUserIcons();
+
     currentKey = roomKey;
     generateFileTree(fetchedFiles.files);
     initLocalFileInfos(roomKey, fetchedFiles.files);
@@ -268,10 +277,7 @@ function socketJoin(key) {
 
         const oldCarets = allRoomUsers[selectionPackage.userId];
         if (oldCarets) allRoomUsers[selectionPackage.userId] = {...oldCarets, ...selectionPackage};
-        else {
-            selectionPackage.color = `hsl(${(260 + Object.keys(allRoomUsers).length * 40) % 360}, 76%, 38%)`
-            allRoomUsers[selectionPackage.userId] = selectionPackage;
-        }
+        else allRoomUsers[selectionPackage.userId] = selectionPackage;
 
         updateUserIcons();
 
@@ -395,34 +401,6 @@ function socketJoin(key) {
         cell.custom_modifications++;
     });
 
-    function updateUserIcons() {
-        users.textContent = "";
-        fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
-        for(const user of Object.values(allRoomUsers)) {
-            const div = document.createElement("div");
-            div.classList.toggle("inactive", user.cel === -1);
-            if (!user.username) user.username = user.userId.substring(0, 3);
-            div.textContent = user.username.substring(0, 15);
-            div.style.background = user.color;
-            div.addEventListener("click", () => {
-                const fileData = files[user.key][user.filename];
-                if (!fileData) return;
-                if (currentFileName !== user.filename) displayFileData(fileData);
-                if (user.cel !== -1) user.scrollToCursor?.();
-            })
-            users.append(div);
-
-            const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
-            if (parentElem) {
-                const span = document.createElement("span");
-                span.textContent = user.username;
-                span.style.background = user.color;
-                span.classList.add("user-indicator")
-                parentElem.append(span);
-            }
-        }
-    }
-
     function preprocessSelection(editor, selections) {
         for(const selection of selections) {
             selection.start = editor.getModel().getOffsetAt({
@@ -507,6 +485,36 @@ function socketJoin(key) {
             ));
 
             createCustomCursor(editor, { selections: user.selections, user });
+        }
+    }
+}
+
+function updateUserIcons() {
+    users.textContent = "";
+    fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
+    console.log(allRoomUsers);
+    for(const user of Object.values(allRoomUsers)) {
+        console.log(user);
+        const div = document.createElement("div");
+        div.classList.toggle("inactive", user.cel === -1);
+        if (!user.username) user.username = user.userId.substring(0, 3);
+        div.textContent = user.username.substring(0, 15);
+        div.classList.add(`user-color-${user.color}`);
+        div.addEventListener("click", () => {
+            const fileData = files[user.key][user.filename];
+            if (!fileData) return;
+            if (currentFileName !== user.filename) displayFileData(fileData);
+            if (user.cel !== -1) user.scrollToCursor?.();
+        })
+        users.append(div);
+
+        const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
+        if (parentElem) {
+            
+            const span = document.createElement("span");
+            span.textContent = user.username;
+            span.classList.add("user-indicator", `user-color-${user.color}`)
+            parentElem.append(span);
         }
     }
 }

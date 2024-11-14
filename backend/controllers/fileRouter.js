@@ -41,7 +41,7 @@ const hostFiles = async (req, res) => {
 		if (!(id in users)) throw new Error("Socket id is not valid");
 		if (key in hostedFiles) throw new Error("Dublicate room key");
 		if (!key || key.length < 2) throw new Error("Key is not long enough");
-		roomUsers[key] = [{id}];
+		roomUsers[key] = [{id, color: 1}];
 		hostedFiles[key] = fileData;
 		users[id] = key;
 		for(const file of Object.values(fileData)) {
@@ -53,7 +53,7 @@ const hostFiles = async (req, res) => {
 	}
 };
 
-const getFiles = async (req, res) => {
+const joinFiles = async (req, res) => {
 	const { id, key } = req.body;
 
 	try {
@@ -62,7 +62,8 @@ const getFiles = async (req, res) => {
 		if (!hostedFiles[key]) throw new Error("Invalid key");
 
 		users[id] = key;
-		roomUsers[key].push({id});
+		console.log((roomUsers[key].length % 5) + 1)
+		roomUsers[key].push({ id, color: (roomUsers[key].length % 5) + 1 });
 		const clone = structuredClone(hostedFiles[key]);
 		for(const file of Object.values(clone)) {
 			delete file.changes;
@@ -76,7 +77,7 @@ const getFiles = async (req, res) => {
 module.exports = {
 	getPosts,
 	hostFiles,
-	getFiles,
+	joinFiles,
 	hostedFiles,
 	roomUsers,
 	users
