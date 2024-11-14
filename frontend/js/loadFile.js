@@ -158,9 +158,9 @@ function randomCharFromString(string) {
 }
 
 
-lag.addEventListener("click", async e => {
-    socket.emit("lag", "data")
-});
+// lag.addEventListener("click", async e => {
+//     socket.emit("lag", "data")
+// });
 
 host.addEventListener("click", async () => {
     if (socket.id == null) {
