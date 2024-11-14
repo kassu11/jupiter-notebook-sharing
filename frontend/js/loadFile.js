@@ -97,7 +97,12 @@ window.addEventListener("blur", async () => {
     if (fileData && document.querySelector("#autosave").checked) {
         await writeJsonDataToUserFile(fileData);
     }
-})
+});
+
+setInterval(() => {
+    if (location.href.includes("localhost")) return;
+    fetch("https://jupiter-notebook-sharing.onrender.com/").then(data => data.json());
+}, 1000 * 60 * 5);
 
 setInterval(async () => {
     for (const localFileData of allFileHandlers) {
