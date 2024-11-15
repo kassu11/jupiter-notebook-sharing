@@ -841,10 +841,25 @@ async function writeJsonDataToUserFile(fileData) {
 
     const clone = {
         ...fileData.data,
-        cells: fileData.data.cells.map(({ custom_modifications, editor, ...cell }) => {
+        cells: fileData.data.cells.map(({
+            custom_modifications,
+            editor,
+            cell_type,
+            execution_count,
+            id,
+            metadata,
+            outputs,
+            source,
+            ...cell
+        }) => {
             return {
+                "cell_type": cell_type ?? "code",
+                "execution_count": execution_count ?? null,
+                "id": id ?? generateRandomId(),
+                "metadata": metadata ?? {},
+                "outputs": outputs ?? [],
+                source: formatSource(source),
                 ...cell,
-                source: formatSource(cell.source)
             };
         })
     };
