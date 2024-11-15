@@ -343,6 +343,7 @@ function socketJoin(key) {
             if (fileActive) {
                 const cellElem = document.querySelectorAll(".notebook-cell")[cellIndex];
                 cellElem.querySelector("select").value = change.newType;
+                cellElem.classList.toggle("markdown", change.newType === "markdown");
                 changeEditorLanguage(fileData.data.cells[cellIndex].editor, change.newType);
             }
         }
@@ -610,6 +611,7 @@ function displayFileData(fileData) {
 function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem: notebook}) {
     const cellContainer = document.createElement("div");
     cellContainer.classList.add("notebook-cell");
+    cellContainer.classList.toggle("markdown", cell.cell_type === "markdown");
 
     const typeSelection = document.createElement("select");
     typeSelection.addEventListener("change", () => {
@@ -622,6 +624,7 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         });
 
         changeEditorLanguage(cell.editor, typeSelection.value);
+        cellContainer.classList.toggle("markdown", cell.cell_type === "markdown");
     });
 
     const markdownOption = document.createElement("option");
@@ -699,19 +702,12 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         });
 
         editor.onDidChangeModelContent(changes => {
-            console.info("onDidChangeModelContent");
-
             if(changes.isFlush) return;
 
             changeInsideCell2(fileData.key, fileData.name, cell.id, changes)
         });
 
         editor.onDidChangeCursorSelection(selection => {
-            console.info("onDidChangeCursorSelection", selection.reason);
-            
-            // const cursorElement = editorContainer.querySelector(".cursor-primary") || editorContainer.querySelector(".cursor");
-            // cursorElement?.scrollIntoViewIfNeeded();
-
             if (selection.reason === 1) return
 
             const selections = editor.getSelections();
