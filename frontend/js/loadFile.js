@@ -11,7 +11,7 @@ const users = document.querySelector("#users");
 const username = document.querySelector("#username");
 
 self.MonacoEnvironment = {
-    getWorkerUrl: function (moduleId, label) {
+    getWorkerUrl: function () {
         return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
         self.MonacoEnvironment = { baseUrl: '${window.location.origin}' };`
         )}`;
@@ -116,12 +116,13 @@ setInterval(async () => {
 
             localFileData.data = {...jsonData, cells: localFileData.data.cells};
 
+            console.log(localFileData.name, file.lastModified);
+
             for (const newCell of jsonData.cells) {
                 const cell = localCells[newCell.id];
                 if (!cell) continue;
 
                 cell.metadata = newCell.metadata;
-                // cell.cell_type = newCell.cell_type;
                 cell.outputs = newCell.outputs;
                 cell.execution_count = newCell.execution_count;
 
@@ -129,22 +130,7 @@ setInterval(async () => {
                 const cellElem = document.querySelectorAll(".notebook-cell")[elementIndex];
 
                 updateOutputFromCellElem(cellElem, newCell);
-
-                // TODO: last_id is no longer set, add modified_since_last_save to file data
-                if (newCell.last_id === cell.custom_modifications) {
-                    if (Array.isArray(newCell.source)) newCell.source = newCell.source.join("");
-
-                    changeInsideCell(
-                        localFileData.key,
-                        localFileData.name,
-                        cell.id,
-                        cell.source,
-                        newCell.source
-                    )
-                }
             }
-
-            console.log(localFileData.name, file.lastModified);
         }
     }
 }, 100);
@@ -582,6 +568,10 @@ async function createFile(file, fileNames, path) {
         cell.custom_modifications = 0;
         cell.id ??= generateRandomId();
     }
+
+    if (jsonData.nbformat < 4) jsonData.nbformat = 4;
+    if (jsonData.nbformat_minor < 5) jsonData.nbformat_minor = 5;
+
     const fileName = `${path}/${file.name}`;
     fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
     allFileHandlers.push(fileNames[fileName]);
@@ -708,7 +698,7 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         editor.onDidChangeModelContent(changes => {
             if(changes.isFlush) return;
 
-            changeInsideCell2(fileData.key, fileData.name, cell.id, changes)
+            sendMonacoEditorChange(fileData.key, fileData.name, cell.id, changes)
         });
 
         editor.onDidChangeCursorSelection(selection => {
@@ -883,101 +873,19 @@ async function writeJsonDataToUserFile(fileData) {
     if (typeof reloadJupiterlabExtension !== "undefined") reloadJupiterlabExtension();
 }
 
-function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
-    if (beforeEditText === editedText) return;
-
-    const cell = files[key][filename].data.cells.find(v => v.id === cellId);
-    const change = {key, cel: cellId, filename, custom_modifications: cell.custom_modifications};
-    const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
-
-    let firstUnchangedChar = -1;
-    let lastUnchangedChar = -1;
-
-    for(let x = 0; x < beforeEditText.length; x++) {
-        if (beforeEditText[x] !== editedText[x]) break;
-        firstUnchangedChar = x;
-    }
-
-    for (let x = 1; x < beforeEditText.length; x++) {
-        if (beforeEditText.at(-x) !== editedText.at(-x) || x + firstUnchangedChar === editedText.length) break;
-        lastUnchangedChar = x - 1;
-    }
-
-    if (firstUnchangedChar === -1 && lastUnchangedChar === -1) {
-        // console.log("If change: 1 done")
-        change.start = 0;
-        change.end = beforeEditText.length;
-        change.data = editedText;
-    } else if (firstUnchangedChar === -1) {
-        // console.log("If change: 2 and 3 done")
-        change.start = 0;
-        change.end = beforeEditText.length - 1 - lastUnchangedChar;
-        change.data = editedText.substring(0, editedText.length - 1 - lastUnchangedChar);
-    } else if (lastUnchangedChar === -1) {
-        // console.log("If change: 4 and 5 done")
-        change.start = firstUnchangedChar + 1;
-        change.end = beforeEditText.length;
-        change.data = editedText.substring(firstUnchangedChar + 1);
-    } else {
-        // console.log("If change: 6 and 7 done");
-        change.start = firstUnchangedChar + 1;
-        change.end = beforeEditText.length - lastUnchangedChar - 1;
-        change.data = editedText.substring(firstUnchangedChar + 1, editedText.length - lastUnchangedChar - 1);
-    }
-    // console.log(firstUnchangedChar, lastUnchangedChar);
-    // console.log({start: firstUnchangedChar, end: lastUnchangedChar})
-
-    // console.log(JSON.stringify(change, (key, val) => {
-    //     if (key === "filename") return undefined;
-    //     if (key === "cel") return undefined;
-    //     if (key === "custom_modifications") return undefined;
-    //     if (key === "key") return undefined;
-    //     return val;
-    // }));
-
-    const advancedClone = structuredClone(unappliedChanges);
-    for(let i = 1; i < advancedClone.length; i++) {
-        for(let j = 0; j < i; j++) {
-            advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
-        }
-    }
-
-    advancedClone.forEach(change => {
-        delete change.stop;
-        delete change.replaceEnd;
-    });
-
-    let revertedChange = structuredClone(change);
-    for(let i = advancedClone.length - 1; i >= 0; i--) {
-        revertedChange = revertChangeBackward(advancedClone[i], revertedChange);
-    }
-
-    unappliedChanges.push(revertedChange);
-    
-    socket.emit("changeFile", revertedChange);
-}
-
-function changeInsideCell2(key, filename, cellId, vscodeChanges) {
+function sendMonacoEditorChange(key, filename, cellId, vscodeChanges) {
     const cell = files[key][filename].data.cells.find(v => v.id === cellId);
     const unappliedChanges = allUnappliedChanges[key + filename][cellId].unappliedChanges;
 
-   
-    
-    const changes = vscodeChanges.changes.map(change => {
-        return {
-            start: change.rangeOffset,
-            end: change.rangeOffset + change.rangeLength,
-            data: change.text
-        };
-        // changeBase.start = change.rangeOffset;
-        // changeBase.end = change.rangeOffset + change.rangeLength;
-        // changeBase.data = 
-    });
+    const changes = vscodeChanges.changes.map(change => ({
+        start: change.rangeOffset,
+        end: change.rangeOffset + change.rangeLength,
+        data: change.text
+    }));
 
     const advancedClone = structuredClone(unappliedChanges.map(v => v.changes).flat());
     for(let i = 1; i < advancedClone.length; i++) {
         for(let j = 0; j < i; j++) {
-            // console.log(advancedClone, advancedClone[j], advancedClone[i])
             advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
         }
     }
