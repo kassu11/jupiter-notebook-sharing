@@ -19,8 +19,8 @@ function addReloadSetting() {
 	const autoSaveLable = document.querySelector(`.header label[for="autosave"]`);
 	if (!autoSaveLable) return;
 
-	const lable = document.createElement("lable");
-	lable.setAttribute("for", "jupiterlabReload");
+	const label = document.createElement("label");
+	label.setAttribute("for", "jupiterlabReload");
 
 	const input = document.createElement("input");
 	input.setAttribute("type", "checkbox");
@@ -32,8 +32,8 @@ function addReloadSetting() {
 	button.textContent = "Reload";
 	button.addEventListener("click", sendReloadRequest);
 	
-	lable.append(input, " JupyterLab reload");
-	autoSaveLable.after(lable);
+	label.append(input, " JupyterLab reload");
+	autoSaveLable.after(label);
 	autoSaveLable.before(button);
 }
 
