@@ -859,6 +859,13 @@ async function writeJsonDataToUserFile(fileData) {
     const file = await fileData.handler.getFile();
     fileData.lastModified = file.lastModified;
     await stream.close();
+
+    const extensionJupiterlabReload = document.querySelector("#jupiterlabReload");
+    if (extensionJupiterlabReload?.checked) {
+        document.querySelector("#reloadJupiterlab")?.click();
+    }
+
+    if (typeof reloadJupiterlabExtension !== "undefined") reloadJupiterlabExtension();
 }
 
 function changeInsideCell(key, filename, cellId, beforeEditText, editedText) {
