@@ -8,7 +8,8 @@ function isJupiterShareTab() {
 
 function isJupyterlabTab() {
 	const titleIsJupyterlab = document.title.toLowerCase().includes("jupyterlab");
-	return titleIsJupyterlab;
+	const isLocalHost = location.href.includes("http://localhost:");
+	return titleIsJupyterlab && isLocalHost;
 }
 
 function initJupiterShare() {
