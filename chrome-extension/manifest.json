@@ -1,8 +1,8 @@
 {
-	"name": "Jupyterlab hot reload",
-	"version": "1.0",
+	"name": "JupyterLab hot reload",
+	"version": "1.1",
 	"manifest_version": 3,
-	"description": "Reloads the jupyterlab file when using jupiter notebook share",
+	"description": "Reloads the JupyterLab file when using jupiter notebook share",
 	"icons": {
 		"16": "icon-16.png",
 		"48": "icon-48.png",

@@ -46,20 +46,25 @@ function initJupyterlab() {
 	exitEditMode.setAttribute("data-commandLinker-command", "notebook:enter-command-mode");
 	const reload = document.createElement("button");
 	reload.setAttribute("data-commandLinker-command", "docmanager:reload");
-
-	setInterval(() => {
-		chrome.storage.local.get("reload", async (data) => {
-			if (!data?.reload) return;
-			chrome.storage.local.remove("reload");
-
-			if (!reload.parentElement) {
-				const parent = document.querySelector(".lm-MenuBar-content");
-				if (!parent) return;
-				parent.append(reload, exitEditMode);
-			}
-			
-			exitEditMode.click();
-			reload.click();
-		});
+	
+	let interval = setInterval(() => {
+		try {
+			chrome.storage.local.get("reload", async (data) => {
+				if (!data?.reload) return;
+				chrome.storage.local.remove("reload");
+	
+				if (!reload.parentElement) {
+					const parent = document.querySelector(".lm-MenuBar-content");
+					if (!parent) return;
+					parent.append(reload, exitEditMode);
+				}
+				
+				exitEditMode.click();
+				reload.click();
+			});
+		} catch (err) {
+			console.error(err);
+			clearInterval(interval);
+		}
 	}, 200);
 }
