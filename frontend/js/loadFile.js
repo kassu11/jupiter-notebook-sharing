@@ -190,6 +190,8 @@ host.addEventListener("click", async () => {
 
     files[key] = filesData;
     currentKey = key;
+    host.setAttribute("disabled", "");
+    join.setAttribute("disabled", "");
 
     generateFileTree(filesData);
     initLocalFileInfos(key, filesData);
@@ -219,6 +221,8 @@ join.addEventListener("click", async () => {
     });
 
     updateUserIcons();
+    host.setAttribute("disabled", "");
+    join.setAttribute("disabled", "");
 
     currentKey = roomKey;
     generateFileTree(fetchedFiles.files);

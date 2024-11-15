@@ -169,7 +169,6 @@ function initJupiterShare() {
 }
 
 function addReloadSetting() {
-	// console.log("jupiter reload")
 	const autoSaveLable = document.querySelector(`.header label[for="autosave"]`);
 	if (!autoSaveLable) return;
 
@@ -196,21 +195,24 @@ function sendReloadRequest() {
 }
 
 function initJupiterlab() {
-	const button = document.createElement("button");
-	button.setAttribute("data-commandLinker-command", "docmanager:reload");
+	const exitEditMode = document.createElement("button");
+	exitEditMode.setAttribute("data-commandLinker-command", "notebook:enter-command-mode");
+	const reload = document.createElement("button");
+	reload.setAttribute("data-commandLinker-command", "docmanager:reload");
 
 	setInterval(() => {
 		chrome.storage.local.get("reload", async (data) => {
 			if (!data?.reload) return;
 			chrome.storage.local.remove("reload");
 
-			if (!button.parentElement) {
+			if (!reload.parentElement) {
 				const parent = document.querySelector(".lm-MenuBar-content");
 				if (!parent) return;
-				parent.append(button);
+				parent.append(reload, exitEditMode);
 			}
-	
-			button.click();
+			
+			exitEditMode.click();
+			reload.click();
 		});
 	}, 200);
 }
