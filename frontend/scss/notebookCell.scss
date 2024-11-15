@@ -12,6 +12,10 @@
     padding: 10px;
     border-radius: 5px;
 
+    &.markdown {
+        background-color: #202c4b
+    }
+
     select {
         border-color: black;
     }
@@ -23,6 +27,20 @@
     .button-container {
         display: flex;
         gap: 5px;
+
+        button {
+            background: #00000066;
+            border: 2px solid black;
+            padding: 3px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform .1s, box-shadow .1s;
+            
+            &:hover {
+                transform: scale(1.02);
+                box-shadow: 0 0 4px 1px #0000009c;
+            }
+        }
     }
 
     .outputContainer {
