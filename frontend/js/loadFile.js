@@ -700,8 +700,6 @@ function addCellElement(cell, fileData, cellDomPosition = { type: "append", elem
         editor.onDidChangeModelContent(changes => {
             if (changes.isFlush || preventModelChange) return;
 
-            console.log("onDidChangeModelContent", changes);
-
             sendMonacoEditorChange(fileData.key, fileData.name, cell.id, changes)
         });
 
@@ -1012,8 +1010,6 @@ function revertChangeBackward(oldChange, change) {
 }
 
 function changeEditorText(editor, source, rootChangesPackages) {
-    // console.log("Change pre element", rootChanges);
-
     const advancedClone = structuredClone(rootChangesPackages.map(rootPackage => rootPackage.changes).flat());
     for (let i = 1; i < advancedClone.length; i++) {
         for (let j = 0; j < i; j++) {
@@ -1024,72 +1020,32 @@ function changeEditorText(editor, source, rootChangesPackages) {
     if (rootChangesPackages[0]?.filename !== currentFileName) return;
 
     for (const change of advancedClone) {
-        // if(newText === null) {
-        //     const fileData = files[change.key][change.filename];
-        //     cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
-        //     newText = fileData.data.cells[cellNum].source;
-        // }
         source = source.substring(0, change.start) + change.data + source.substring(change.end);
     }
 
-    // if(cellNum === -1) return;
-    // const textarea = notebook.querySelectorAll("textarea")[cellNum];
-    // const selectionStart = textarea.selectionStart;
-    // const selectionEnd = textarea.selectionEnd;
-    // const selectionDirection = textarea.selectionDirection;
-    // textarea.value = newText;
-
-    // console.log(advancedClone)
-
-    // if (source !== editor.getValue()) {
-    //     editor1.pushUndoStop();
-    //     editor1.executeEdits(
-    //         null, // Optional: source of the edit, can be `null`
-    //         [
-    //             {
-    //                 range: new monaco.Range(position.startLineNumber, position.startColumn, position.endLineNumber, position.endColumn),
-    //                 text: text,
-    //                 forceMoveMarkers: true // Keeps markers (like selections) in place
-    //             }
-    //         ],
-    //     );
-
-    //     editor1.popUndoStop();
-    // }
+    const selection = editor.getSelections();
     if (source !== editor.getValue()) {
         const change = returnDiff(editor.getValue(), source);
-
-        console.log("change:", change);
-
-        console.log(source, "----", editor.getValue())
 
         editor.pushUndoStop();
         preventModelChange = true;
         editor.executeEdits(null,
-            [ { range: new monaco.Range(change.startLineNumber, change.startColumn, change.endLineNumber, change.endColumn), text: change.data, forceMoveMarkers: true } ],
+            [ { range: new monaco.Range(change.startLineNumber, change.startColumn, change.endLineNumber, change.endColumn), text: change.data, forceMoveMarkers: false } ],
         );
-
-        console.log(editor.getValue());
 
         preventModelChange = false;
         editor.popUndoStop();
+        editor.setSelections(selection);
     }
     if (source !== editor.getValue()) {
-        console.log("Destroy history")
-        const selection = editor.getSelections();
         editor.setValue(source);
         editor.setSelections(selection);
     }
-    // textarea.selectionStart = selectionStart;
-    // textarea.selectionEnd = selectionEnd;
-    // textarea.selectionDirection = selectionDirection;
-    // updateTextAreaHeight(textarea);
-    // updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
+    
 }
 
 function returnDiff(beforeEditText, editedText) {
     if (beforeEditText === editedText) return;
-    const beforeEditArray = beforeEditText.split("\n");
 
     const change = { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 };
     let firstUnchangedChar = -1;
@@ -1101,7 +1057,7 @@ function returnDiff(beforeEditText, editedText) {
     }
 
     for (let x = 1; x < beforeEditText.length; x++) {
-        if (beforeEditText.at(-x) !== editedText.at(-x) || x + firstUnchangedChar >= editedText.length - 1) break;
+        if (beforeEditText.at(-x) !== editedText.at(-x) || x + firstUnchangedChar >= editedText.length - 1 || x - 1 <= firstUnchangedChar) break;
         lastUnchangedChar = x - 1;
     }
 
@@ -1121,7 +1077,6 @@ function returnDiff(beforeEditText, editedText) {
         change.start = firstUnchangedChar + 1;
         change.end = beforeEditText.length - lastUnchangedChar - 1;
         change.data = editedText.substring(firstUnchangedChar + 1, editedText.length - lastUnchangedChar - 1);
-        console.log(change.data);
     }
 
     for (let i = 0; i < change.start; i++) {
