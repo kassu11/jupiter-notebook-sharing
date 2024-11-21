@@ -1,7 +1,7 @@
 import socketIO from "socket.io-client";
-import {api} from "./api";
+import { api } from "./api";
 import * as monaco from 'monaco-editor';
-import {createCustomCursor} from "./customCursor";
+import { createCustomCursor } from "./customCursor";
 
 const fileTree = document.querySelector("#fileTree");
 const notebook = document.querySelector("#notebook");
@@ -9,6 +9,8 @@ const host = document.querySelector("#host");
 const join = document.querySelector("#join");
 const users = document.querySelector("#users");
 const username = document.querySelector("#username");
+
+let preventModelChange = false;
 
 self.MonacoEnvironment = {
     getWorkerUrl: function () {
@@ -23,7 +25,7 @@ const editorContainer = document.getElementById("editor-container");
 editorContainer.addEventListener("wheel", e => {
     e.stopPropagation();
     e.stopImmediatePropagation();
-}, {capture: true});
+}, { capture: true });
 
 window.addEventListener("resize", () => resizeAllEditors());
 
@@ -112,9 +114,9 @@ setInterval(async () => {
             const fileText = await file.text();
             const jsonData = JSON.parse(fileText);
             const localCells = {};
-            for(const cell of localFileData.data.cells) localCells[cell.id] = cell;
+            for (const cell of localFileData.data.cells) localCells[cell.id] = cell;
 
-            localFileData.data = {...jsonData, cells: localFileData.data.cells};
+            localFileData.data = { ...jsonData, cells: localFileData.data.cells };
 
             console.log(localFileData.name, file.lastModified);
 
@@ -141,7 +143,7 @@ function generateRandomId() {
 }
 
 function randomString(chars, length) {
-    return Array.from({length}, () => randomCharFromString(chars)).join("");
+    return Array.from({ length }, () => randomCharFromString(chars)).join("");
 }
 
 function randomCharFromString(string) {
@@ -162,13 +164,13 @@ host.addEventListener("click", async () => {
     const key = prompt("Set custom room key");
     const filesData = await loadProjectFolder();
 
-    for(const value of Object.values(filesData)) {
+    for (const value of Object.values(filesData)) {
         value.key = key;
     }
 
     const response = await api.hostFiles({
-        fileData: jsonDataCopyForServer(filesData), 
-        key, 
+        fileData: jsonDataCopyForServer(filesData),
+        key,
         id: socket.id
     });
 
@@ -188,12 +190,12 @@ join.addEventListener("click", async () => {
     if (socket.id == null) return alert("Server is not yet open, try again");
     const roomKey = prompt("Enter room key");
 
-    const fetchedFiles = await api.getLoadedFiles({key: roomKey, id: socket.id});
+    const fetchedFiles = await api.getLoadedFiles({ key: roomKey, id: socket.id });
 
     if (fetchedFiles.status !== 200) return alert(fetchedFiles.message);
 
     files[roomKey] = fetchedFiles.files;
-    for(const value of Object.values(fetchedFiles.files)) {
+    for (const value of Object.values(fetchedFiles.files)) {
         value.key = roomKey;
     }
 
@@ -218,8 +220,8 @@ join.addEventListener("click", async () => {
 
 function generateFileTree(fileData) {
     const fileTreeObject = {};
-    
-    for(const file of Object.values(fileData)) {
+
+    for (const file of Object.values(fileData)) {
         let curr = fileTreeObject;
         file.name.substring(1).split("/").forEach((n, i, arr) => {
             curr[n] ??= {};
@@ -227,7 +229,7 @@ function generateFileTree(fileData) {
             if (i == arr.length - 1) {
                 curr.file = true
                 curr.fullFileName = file.name;
-            }; 
+            };
         });
     }
 
@@ -265,20 +267,20 @@ function socketJoin(key) {
         const curIndex = files[key][selectionPackage.filename]?.data.cells.findIndex(row => row.id === selectionPackage.cel);
         const editor = files[key][selectionPackage.filename]?.data.cells[curIndex]?.editor;
 
-        if(editor) {
+        if (editor) {
             selectionPackage.selections &&= preprocessSelection(editor, selectionPackage.selections);
         }
 
         const oldCarets = allRoomUsers[selectionPackage.userId];
-        if (oldCarets) allRoomUsers[selectionPackage.userId] = {...oldCarets, ...selectionPackage};
+        if (oldCarets) allRoomUsers[selectionPackage.userId] = { ...oldCarets, ...selectionPackage };
         else allRoomUsers[selectionPackage.userId] = selectionPackage;
 
         updateUserIcons();
 
         if (curIndex === -1) return allRoomUsers[selectionPackage.userId]?.clearCursor?.();
         if (currentFileName !== selectionPackage.filename) return;
-        
-        if (selectionPackage.selections) createCustomCursor(editor, {...selectionPackage, user: allRoomUsers[selectionPackage.userId]});
+
+        if (selectionPackage.selections) createCustomCursor(editor, { ...selectionPackage, user: allRoomUsers[selectionPackage.userId] });
         else allRoomUsers[selectionPackage.userId]?.clearCursor?.();
     });
 
@@ -305,7 +307,7 @@ function socketJoin(key) {
             initLocalFileInfos(key, [fileData]);
             if (fileActive) {
                 const parentElem = document.querySelectorAll(".notebook-cell")[cellIndex];
-                addCellElement(change.data, fileData, {type: "after", elem: parentElem});
+                addCellElement(change.data, fileData, { type: "after", elem: parentElem });
             }
         } else if (change.type === "moveUp") {
             if (fileActive) {
@@ -313,7 +315,7 @@ function socketJoin(key) {
                 const current = document.querySelectorAll(".notebook-cell")[cellIndex];
                 const activeCellElem = document.activeElement?.closest(".notebook-cell");
 
-                if(activeCellElem === current) current.after(nextCell);
+                if (activeCellElem === current) current.after(nextCell);
                 else nextCell.before(current);
             }
             [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
@@ -322,13 +324,13 @@ function socketJoin(key) {
                 const prevCell = document.querySelectorAll(".notebook-cell")[cellIndex + 1];
                 const current = document.querySelectorAll(".notebook-cell")[cellIndex];
                 const activeCellElem = document.activeElement?.closest(".notebook-cell");
-                
-                if(activeCellElem === current) current.before(prevCell);
+
+                if (activeCellElem === current) current.before(prevCell);
                 else prevCell.after(current);
             }
 
             [fileData.data.cells[cellIndex + 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex + 1]]
-        } else if(change.type === "changeType") {
+        } else if (change.type === "changeType") {
             fileData.data.cells[cellIndex].cell_type = change.newType;
             if (fileActive) {
                 const cellElem = document.querySelectorAll(".notebook-cell")[cellIndex];
@@ -346,7 +348,7 @@ function socketJoin(key) {
         const cell = fileData.data.cells[cellIndex];
         const fileUsers = getFileUsers(changePackage);
         let needToUpdateSelection = changePackage.cel === currentCelId && currentFileName === changePackage.filename;
-        if(unappliedChanges.length) {
+        if (unappliedChanges.length) {
             const removeUserId = (key, val) => key === "userId" ? undefined : val;
             if (JSON.stringify(changePackage, removeUserId) === JSON.stringify(unappliedChanges[0])) {
                 unappliedChanges.shift();
@@ -366,8 +368,8 @@ function socketJoin(key) {
             [changePackage, ...unappliedChanges]
         );
 
-        for(let i = 1; i < changePackage.changes.length; i++) {
-            for(let j = 0; j < i; j++) {
+        for (let i = 1; i < changePackage.changes.length; i++) {
+            for (let j = 0; j < i; j++) {
                 changePackage.changes[i] = advanceChangeForward(changePackage.changes[j], changePackage.changes[i]);
             }
         }
@@ -382,7 +384,7 @@ function socketJoin(key) {
 
         for (let i = 0; i < unappliedChanges.length; i++) {
             for (const change of changePackage.changes) {
-                for(let j = 0; j < unappliedChanges[i].changes.length; j++) {
+                for (let j = 0; j < unappliedChanges[i].changes.length; j++) {
                     unappliedChanges[i].changes[j] = advanceChangeForward(change, unappliedChanges[i].changes[j]);
                 }
             }
@@ -396,13 +398,13 @@ function socketJoin(key) {
     });
 
     function preprocessSelection(editor, selections) {
-        for(const selection of selections) {
+        for (const selection of selections) {
             selection.start = editor.getModel().getOffsetAt({
-                lineNumber: selection.startLineNumber, 
+                lineNumber: selection.startLineNumber,
                 column: selection.startColumn
             });
             selection.end = editor.getModel().getOffsetAt({
-                lineNumber: selection.endLineNumber, 
+                lineNumber: selection.endLineNumber,
                 column: selection.endColumn
             });
         }
@@ -486,7 +488,7 @@ function socketJoin(key) {
 function updateUserIcons() {
     users.textContent = "";
     fileTree.querySelectorAll("span.user-indicator")?.forEach(span => span.remove());
-    for(const user of Object.values(allRoomUsers)) {
+    for (const user of Object.values(allRoomUsers)) {
         const div = document.createElement("div");
         div.classList.toggle("inactive", user.cel === -1);
         if (!user.username) user.username = user.userId.substring(0, 3);
@@ -502,7 +504,7 @@ function updateUserIcons() {
 
         const parentElem = document.querySelector(`li.file[file="${user.filename}"]`);
         if (parentElem) {
-            
+
             const span = document.createElement("span");
             span.textContent = user.username;
             span.classList.add("user-indicator", `user-color-${user.color}`)
@@ -512,12 +514,12 @@ function updateUserIcons() {
 }
 
 function initLocalFileInfos(key, files) {
-    for(const file of Object.values(files)) {
+    for (const file of Object.values(files)) {
         allUnappliedChanges[key + file.name] ??= {};
         const cells = allUnappliedChanges[key + file.name];
         cells.unappliedFileChanges ??= [];
-        for(const cell of file.data.cells) {
-            cells[cell.id] ??= {unappliedChanges: []};
+        for (const cell of file.data.cells) {
+            cells[cell.id] ??= { unappliedChanges: [] };
         }
     }
 }
@@ -563,7 +565,7 @@ async function createFile(file, fileNames, path) {
     const fileHandler = await file.getFile();
     const fileData = await fileHandler.text();
     const jsonData = JSON.parse(fileData);
-    for(const cell of jsonData.cells) {
+    for (const cell of jsonData.cells) {
         if (Array.isArray(cell.source)) cell.source = cell.source.join("");
         cell.custom_modifications = 0;
         cell.id ??= generateRandomId();
@@ -573,7 +575,7 @@ async function createFile(file, fileNames, path) {
     if (jsonData.nbformat_minor < 5) jsonData.nbformat_minor = 5;
 
     const fileName = `${path}/${file.name}`;
-    fileNames[fileName] = {name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified};
+    fileNames[fileName] = { name: fileName, data: jsonData, handler: file, lastModified: fileHandler.lastModified };
     allFileHandlers.push(fileNames[fileName]);
 }
 
@@ -586,7 +588,7 @@ function displayFileData(fileData) {
     document.querySelector("li.file.selected")?.classList.remove("selected");
     document.querySelector(`li.file[file="${fileData.name}"]`)?.classList.add("selected");
 
-    socket.emit("caretUpdate", {cel: -1, key: fileData.key, filename: fileData.name});
+    socket.emit("caretUpdate", { cel: -1, key: fileData.key, filename: fileData.name });
 
     const users = Object.values(allRoomUsers).filter(caret => caret.filename === fileData.name);
     for (const cell of fileData.data.cells) {
@@ -602,7 +604,7 @@ function displayFileData(fileData) {
     }
 }
 
-function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem: notebook}) {
+function addCellElement(cell, fileData, cellDomPosition = { type: "append", elem: notebook }) {
     const cellContainer = document.createElement("div");
     cellContainer.classList.add("notebook-cell");
     cellContainer.classList.toggle("markdown", cell.cell_type === "markdown");
@@ -635,23 +637,23 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
     const upButton = document.createElement("button");
     upButton.textContent = "Up";
     upButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", { type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
     const downButton = document.createElement("button");
     downButton.textContent = "Down";
     downButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", { type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
 
     const addButton = document.createElement("button");
     addButton.textContent = "Add";
     addButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "add", cel: cell.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", { type: "add", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "Delete";
     deleteButton.addEventListener("click", () => {
-        socket.emit("cellChange", {type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key});
+        socket.emit("cellChange", { type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
     buttonContainer.append(upButton, downButton, addButton, deleteButton);
 
@@ -661,7 +663,7 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         if (cellDomPosition.type === "after") cellDomPosition.elem.after(cellElement);
         if (cellDomPosition.type === "before") cellDomPosition.elem.before(cellElement);
     }
-    
+
     if (cell.editor) {
         cellContainer.append(typeSelection, cell.editor.getContainerDomNode(), buttonContainer);
         addElementToDom(cellDomPosition, cellContainer);
@@ -675,7 +677,7 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         editorContainer.addEventListener("wheel", e => {
             e.stopPropagation();
             e.stopImmediatePropagation();
-        }, {capture: true});
+        }, { capture: true });
 
         const editor = monaco.editor.create(editorContainer, {
             value: cell.source,
@@ -696,7 +698,7 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
         });
 
         editor.onDidChangeModelContent(changes => {
-            if(changes.isFlush) return;
+            if (changes.isFlush || preventModelChange) return;
 
             sendMonacoEditorChange(fileData.key, fileData.name, cell.id, changes)
         });
@@ -746,7 +748,7 @@ function addCellElement(cell, fileData, cellDomPosition = {type: "append", elem:
     }
 
     updateOutputFromCellElem(cellContainer, cell);
-    
+
     editors.push(cell.editor);
 
     // const cellContainer = createCellElement(fileData, cell);
@@ -822,7 +824,7 @@ function jsonDataCopyForServer(filesData) {
 }
 
 async function writeJsonDataToUserFile(fileData) {
-    if(!fileData.handler) {
+    if (!fileData.handler) {
         fileData.handler = await showSaveFilePicker();
         const fileHandler = await fileData.handler.getFile();
         fileData.lastModified = fileHandler.lastModified;
@@ -884,8 +886,8 @@ function sendMonacoEditorChange(key, filename, cellId, vscodeChanges) {
     }));
 
     const advancedClone = structuredClone(unappliedChanges.map(v => v.changes).flat());
-    for(let i = 1; i < advancedClone.length; i++) {
-        for(let j = 0; j < i; j++) {
+    for (let i = 1; i < advancedClone.length; i++) {
+        for (let j = 0; j < i; j++) {
             advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
         }
     }
@@ -896,16 +898,16 @@ function sendMonacoEditorChange(key, filename, cellId, vscodeChanges) {
     });
 
     let revertedChanges = structuredClone(changes);
-    for(let i = advancedClone.length - 1; i >= 0; i--) {
-        for(let j = 0; j < revertedChanges.length; j++) {
+    for (let i = advancedClone.length - 1; i >= 0; i--) {
+        for (let j = 0; j < revertedChanges.length; j++) {
             revertedChanges[j] = revertChangeBackward(advancedClone[i], revertedChanges[j]);
         }
     }
 
-    const changePackage = {key, cel: cellId, filename, custom_modifications: cell.custom_modifications, changes: revertedChanges};
+    const changePackage = { key, cel: cellId, filename, custom_modifications: cell.custom_modifications, changes: revertedChanges };
 
     unappliedChanges.push(changePackage);
-    
+
     socket.emit("changeFile", changePackage);
 }
 
@@ -986,14 +988,15 @@ function revertChangeBackward(oldChange, change) {
         if (oldChange.end === clone.end) clone.replaceEnd = true;
     } else if (true) {
         console.error("Revert 4: ")
-    } else if (true) { {
+    } else if (true) {
+        {
 
-        if (oldChange.end === clone.end) clone.replaceEnd = true;
-    }
+            if (oldChange.end === clone.end) clone.replaceEnd = true;
+        }
         console.error("Revert 5: ")
     } else if (true) {
         console.error("Revert 6: ")
-    }  else if (true) {
+    } else if (true) {
         console.error("Revert 7: ")
     } else if (true) {
         console.error("Revert 8: ")
@@ -1007,40 +1010,95 @@ function revertChangeBackward(oldChange, change) {
 }
 
 function changeEditorText(editor, source, rootChangesPackages) {
-    // console.log("Change pre element", rootChanges);
-
     const advancedClone = structuredClone(rootChangesPackages.map(rootPackage => rootPackage.changes).flat());
-    for(let i = 1; i < advancedClone.length; i++) {
-        for(let j = 0; j < i; j++) {
+    for (let i = 1; i < advancedClone.length; i++) {
+        for (let j = 0; j < i; j++) {
             advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
         }
     }
 
     if (rootChangesPackages[0]?.filename !== currentFileName) return;
 
-    for(const change of advancedClone) {
-        // if(newText === null) {
-        //     const fileData = files[change.key][change.filename];
-        //     cellNum = fileData.data.cells.findIndex(v => v.id === change.cel);
-        //     newText = fileData.data.cells[cellNum].source;
-        // }
+    for (const change of advancedClone) {
         source = source.substring(0, change.start) + change.data + source.substring(change.end);
     }
 
-    // if(cellNum === -1) return;
-    // const textarea = notebook.querySelectorAll("textarea")[cellNum];
-    // const selectionStart = textarea.selectionStart;
-    // const selectionEnd = textarea.selectionEnd;
-    // const selectionDirection = textarea.selectionDirection;
-    // textarea.value = newText;
     const selection = editor.getSelections();
-    editor.setValue(source);
-    editor.setSelections(selection);
-    // textarea.selectionStart = selectionStart;
-    // textarea.selectionEnd = selectionEnd;
-    // textarea.selectionDirection = selectionDirection;
-    // updateTextAreaHeight(textarea);
-    // updateCodeHighlight(notebook.querySelectorAll(".cell")[cellNum]);
+    if (source !== editor.getValue()) {
+        const change = returnDiff(editor.getValue(), source);
+
+        editor.pushUndoStop();
+        preventModelChange = true;
+        editor.executeEdits(null,
+            [ { range: new monaco.Range(change.startLineNumber, change.startColumn, change.endLineNumber, change.endColumn), text: change.data, forceMoveMarkers: false } ],
+        );
+
+        preventModelChange = false;
+        editor.popUndoStop();
+        editor.setSelections(selection);
+    }
+    if (source !== editor.getValue()) {
+        editor.setValue(source);
+        editor.setSelections(selection);
+    }
+    
+}
+
+function returnDiff(beforeEditText, editedText) {
+    if (beforeEditText === editedText) return;
+
+    const change = { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 };
+    let firstUnchangedChar = -1;
+    let lastUnchangedChar = -1;
+
+    for (let x = 0; x < beforeEditText.length; x++) {
+        if (beforeEditText[x] !== editedText[x]) break;
+        firstUnchangedChar = x;
+    }
+
+    for (let x = 1; x < beforeEditText.length; x++) {
+        if (beforeEditText.at(-x) !== editedText.at(-x) || x + firstUnchangedChar >= editedText.length - 1 || x - 1 <= firstUnchangedChar) break;
+        lastUnchangedChar = x - 1;
+    }
+
+    if (firstUnchangedChar === -1 && lastUnchangedChar === -1) {
+        change.start = 0;
+        change.end = beforeEditText.length;
+        change.data = editedText;
+    } else if (firstUnchangedChar === -1) {
+        change.start = 0;
+        change.end = beforeEditText.length - 1 - lastUnchangedChar;
+        change.data = editedText.substring(0, editedText.length - 1 - lastUnchangedChar);
+    } else if (lastUnchangedChar === -1) {
+        change.start = firstUnchangedChar + 1;
+        change.end = beforeEditText.length;
+        change.data = editedText.substring(firstUnchangedChar + 1);
+    } else {
+        change.start = firstUnchangedChar + 1;
+        change.end = beforeEditText.length - lastUnchangedChar - 1;
+        change.data = editedText.substring(firstUnchangedChar + 1, editedText.length - lastUnchangedChar - 1);
+    }
+
+    for (let i = 0; i < change.start; i++) {
+        if (beforeEditText[i] === "\n") {
+            change.startLineNumber++;
+            change.startColumn = 0;
+        }
+        change.startColumn++;
+    }
+
+    change.endLineNumber = change.startLineNumber
+    change.endColumn = change.startColumn
+
+    for (let i = change.start; i < change.end; i++) {
+        if (beforeEditText[i] === "\n") {
+            change.endLineNumber++;
+            change.endColumn = 0;
+        }
+        change.endColumn++;
+    }
+
+    return change;
 }
 
 (() => {
@@ -1050,27 +1108,27 @@ function changeEditorText(editor, source, rootChangesPackages) {
     test(
         "X_tr123, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":4,"end":5,"data":"1"},
-            {"start":5,"end":6,"data":"2"},
-            {"start":6,"end":7,"data":"3"},
+            { "start": 4, "end": 5, "data": "1" },
+            { "start": 5, "end": 6, "data": "2" },
+            { "start": 6, "end": 7, "data": "3" },
         ],
         [
-            {"start":4,"end":5,"data":"1"},
-            {"start":5,"end":6,"data":"2"},
-            {"start":6,"end":7,"data":"3"},
+            { "start": 4, "end": 5, "data": "1" },
+            { "start": 5, "end": 6, "data": "2" },
+            { "start": 6, "end": 7, "data": "3" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = train_5555555555(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":44,"end":47,"data":"123"},
-            {"start":43,"end":48,"data":"44444"},
-            {"start":41,"end":51,"data":"5555555555"},
+            { "start": 44, "end": 47, "data": "123" },
+            { "start": 43, "end": 48, "data": "44444" },
+            { "start": 41, "end": 51, "data": "5555555555" },
         ],
         [
-            {"start":44,"end":47,"data":"123"},
-            {"start":43,"end":48,"data":"44444"},
-            {"start":41,"end":51,"data":"5555555555"},
+            { "start": 44, "end": 47, "data": "123" },
+            { "start": 43, "end": 48, "data": "44444" },
+            { "start": 41, "end": 51, "data": "5555555555" },
         ]
     );
 
@@ -1078,79 +1136,79 @@ function changeEditorText(editor, source, rootChangesPackages) {
     test(
         ", , , y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":0,"end":7,"data":""},
-            {"start":2,"end":8,"data":""},
-            {"start":4,"end":11,"data":""},
+            { "start": 0, "end": 7, "data": "" },
+            { "start": 2, "end": 8, "data": "" },
+            { "start": 4, "end": 11, "data": "" },
         ],
         [
-            {"start":0,"end":7,"data":""},
-            {"start":9,"end":15,"data":""},
-            {"start":17,"end":24,"data":""},
+            { "start": 0, "end": 7, "data": "" },
+            { "start": 9, "end": 15, "data": "" },
+            { "start": 17, "end": 24, "data": "" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = _split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":35,"end":36,"data":""},
-            {"start":35,"end":36,"data":""},
-            {"start":35,"end":43,"data":""},
+            { "start": 35, "end": 36, "data": "" },
+            { "start": 35, "end": 36, "data": "" },
+            { "start": 35, "end": 43, "data": "" },
         ],
         [
-            {"start":35,"end":36,"data":""},
-            {"start":36,"end":37,"data":""},
-            {"start":37,"end":45,"data":""},
+            { "start": 35, "end": 36, "data": "" },
+            { "start": 36, "end": 37, "data": "" },
+            { "start": 37, "end": 45, "data": "" },
         ]
     );
     test(
         "123, 456, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":0,"end":7,"data":"123"},
-            {"start":5,"end":8,"data":"4"},
-            {"start":6,"end":9,"data":"56"},
+            { "start": 0, "end": 7, "data": "123" },
+            { "start": 5, "end": 8, "data": "4" },
+            { "start": 6, "end": 9, "data": "56" },
         ],
         [
-            {"start":0,"end":7,"data":"123"},
-            {"start":9,"end":12,"data":"4"},
-            {"start":12,"end":15,"data":"56"},
+            { "start": 0, "end": 7, "data": "123" },
+            { "start": 9, "end": 12, "data": "4" },
+            { "start": 12, "end": 15, "data": "56" },
         ]
     );
     test(
         "X_train123, X_test456, y_train789, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":7,"end":7,"data":"123"},
-            {"start":18,"end":18,"data":"456"},
-            {"start":30,"end":30,"data":"789"},
+            { "start": 7, "end": 7, "data": "123" },
+            { "start": 18, "end": 18, "data": "456" },
+            { "start": 30, "end": 30, "data": "789" },
         ],
         [
-            {"start":7,"end":7,"data":"123"},
-            {"start":15,"end":15,"data":"456"},
-            {"start":24,"end":24,"data":"789"},
+            { "start": 7, "end": 7, "data": "123" },
+            { "start": 15, "end": 15, "data": "456" },
+            { "start": 24, "end": 24, "data": "789" },
         ]
     );
     test(
         "X_train123, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":7,"end":7,"data":"1"},
-            {"start":8,"end":8,"data":"2"},
-            {"start":9,"end":9,"data":"3"},
+            { "start": 7, "end": 7, "data": "1" },
+            { "start": 8, "end": 8, "data": "2" },
+            { "start": 9, "end": 9, "data": "3" },
         ],
         [
-            {"start":7,"end":7,"data":"1"},
-            {"start":7,"end":7,"data":"2"},
-            {"start":7,"end":7,"data":"3"},
+            { "start": 7, "end": 7, "data": "1" },
+            { "start": 7, "end": 7, "data": "2" },
+            { "start": 7, "end": 7, "data": "3" },
         ]
     );
     test(
         "X_tra123, X_456789, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":5,"end":7,"data":"123"},
-            {"start":12,"end":14,"data":"456"},
-            {"start":15,"end":17,"data":"789"},
+            { "start": 5, "end": 7, "data": "123" },
+            { "start": 12, "end": 14, "data": "456" },
+            { "start": 15, "end": 17, "data": "789" },
         ],
         [
-            {"start":5,"end":7,"data":"123"},
-            {"start":11,"end":13,"data":"456"},
-            {"start":13,"end":15,"data":"789"},
+            { "start": 5, "end": 7, "data": "123" },
+            { "start": 11, "end": 13, "data": "456" },
+            { "start": 13, "end": 15, "data": "789" },
         ]
     );
 
@@ -1158,148 +1216,148 @@ function changeEditorText(editor, source, rootChangesPackages) {
     test(
         ", , , y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":17,"end":24,"data":""},
-            {"start":9,"end":15,"data":""},
-            {"start":0,"end":7,"data":""},
+            { "start": 17, "end": 24, "data": "" },
+            { "start": 9, "end": 15, "data": "" },
+            { "start": 0, "end": 7, "data": "" },
         ],
         [
-            {"start":17,"end":24,"data":""},
-            {"start":9,"end":15,"data":""},
-            {"start":0,"end":7,"data":""},
+            { "start": 17, "end": 24, "data": "" },
+            { "start": 9, "end": 15, "data": "" },
+            { "start": 0, "end": 7, "data": "" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = train_test(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":50,"end":51,"data":""},
-            {"start":46,"end":50,"data":""},
-            {"start":45,"end":46,"data":""},
+            { "start": 50, "end": 51, "data": "" },
+            { "start": 46, "end": 50, "data": "" },
+            { "start": 45, "end": 46, "data": "" },
         ],
         [
-            {"start":50,"end":51,"data":""},
-            {"start":46,"end":50,"data":""},
-            {"start":45,"end":46,"data":""},
+            { "start": 50, "end": 51, "data": "" },
+            { "start": 46, "end": 50, "data": "" },
+            { "start": 45, "end": 46, "data": "" },
         ]
     );
     test(
         "X_train, X_test, y_train, 33y_test = 2222train_111111test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":41,"data":"111111"},
-            {"start":35,"end":35,"data":"2222"},
-            {"start":26,"end":26,"data":"33"},
+            { "start": 41, "end": 41, "data": "111111" },
+            { "start": 35, "end": 35, "data": "2222" },
+            { "start": 26, "end": 26, "data": "33" },
         ],
         [
-            {"start":41,"end":41,"data":"111111"},
-            {"start":35,"end":35,"data":"2222"},
-            {"start":26,"end":26,"data":"33"},
+            { "start": 41, "end": 41, "data": "111111" },
+            { "start": 35, "end": 35, "data": "2222" },
+            { "start": 26, "end": 26, "data": "33" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = 321train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":35,"end":35,"data":"1"},
-            {"start":35,"end":35,"data":"2", "stop": true},
-            {"start":35,"end":35,"data":"3", "stop": true},
+            { "start": 35, "end": 35, "data": "1" },
+            { "start": 35, "end": 35, "data": "2", "stop": true },
+            { "start": 35, "end": 35, "data": "3", "stop": true },
         ],
         [
-            {"start":35,"end":35,"data":"1"},
-            {"start":35,"end":35,"data":"2", "stop": true},
-            {"start":35,"end":35,"data":"3", "stop": true},
+            { "start": 35, "end": 35, "data": "1" },
+            { "start": 35, "end": 35, "data": "2", "stop": true },
+            { "start": 35, "end": 35, "data": "3", "stop": true },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = 789456123train_test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":35,"end":35,"data":"123"},
-            {"start":35,"end":35,"data":"456", stop: true},
-            {"start":35,"end":35,"data":"789", stop: true},
+            { "start": 35, "end": 35, "data": "123" },
+            { "start": 35, "end": 35, "data": "456", stop: true },
+            { "start": 35, "end": 35, "data": "789", stop: true },
         ],
         [
-            {"start":35,"end":35,"data":"123"},
-            {"start":35,"end":35,"data":"456", stop: true},
-            {"start":35,"end":35,"data":"789", stop: true},
+            { "start": 35, "end": 35, "data": "123" },
+            { "start": 35, "end": 35, "data": "456", stop: true },
+            { "start": 35, "end": 35, "data": "789", stop: true },
         ]
     );
-    
+
     // Case 3
     test(
         "X_train, X_test, y_train, y_test = trai2222t(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":45,"data":"1"},
-            {"start":39,"end":47,"data":"2222"},
+            { "start": 41, "end": 45, "data": "1" },
+            { "start": 39, "end": 47, "data": "2222" },
         ],
         [
-            {"start":41,"end":45,"data":"1"},
-            {"start":39,"end":50,"data":"2222"},
+            { "start": 41, "end": 45, "data": "1" },
+            { "start": 39, "end": 50, "data": "2222" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = train_2222t(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":45,"data":"1"},
-            {"start":41,"end":47,"data":"2222"},
+            { "start": 41, "end": 45, "data": "1" },
+            { "start": 41, "end": 47, "data": "2222" },
         ],
         [
-            {"start":41,"end":45,"data":"1"},
-            {"start":41,"end":50,"data":"2222"},
+            { "start": 41, "end": 45, "data": "1" },
+            { "start": 41, "end": 50, "data": "2222" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = t2222_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":45,"data":"1"},
-            {"start":36,"end":42,"data":"2222", replaceEnd: true},
+            { "start": 41, "end": 45, "data": "1" },
+            { "start": 36, "end": 42, "data": "2222", replaceEnd: true },
         ],
         [
-            {"start":41,"end":45,"data":"1"},
-            {"start":36,"end":45,"data":"2222", replaceEnd: true},
+            { "start": 41, "end": 45, "data": "1" },
+            { "start": 36, "end": 45, "data": "2222", replaceEnd: true },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = trai222222222222st_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":41,"data":"1111111"},
-            {"start":39,"end":50,"data":"222222222222"},
+            { "start": 41, "end": 41, "data": "1111111" },
+            { "start": 39, "end": 50, "data": "222222222222" },
         ],
         [
-            {"start":41,"end":41,"data":"1111111"},
-            {"start":39,"end":43,"data":"222222222222"},
+            { "start": 41, "end": 41, "data": "1111111" },
+            { "start": 39, "end": 43, "data": "222222222222" },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = train_222222222222st_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":41,"data":"1111111"},
-            {"start":41,"end":50,"data":"222222222222", stop: true},
+            { "start": 41, "end": 41, "data": "1111111" },
+            { "start": 41, "end": 50, "data": "222222222222", stop: true },
         ],
         [
-            {"start":41,"end":41,"data":"1111111"},
-            {"start":41,"end":43,"data":"222222222222", stop: true},
+            { "start": 41, "end": 41, "data": "1111111" },
+            { "start": 41, "end": 43, "data": "222222222222", stop: true },
         ]
     );
     test(
         "X_train, X_test, y_train, y_test = 22222222222222222test_split(X, y, test_size=0.2, random_state=42)",
         [
-            {"start":41,"end":41,"data":"1111111"},
-            {"start":35,"end":48,"data":"22222222222222222", replaceEnd: true},
+            { "start": 41, "end": 41, "data": "1111111" },
+            { "start": 35, "end": 48, "data": "22222222222222222", replaceEnd: true },
         ],
         [
-            {"start":41,"end":41,"data":"1111111"},
-            {"start":35,"end":41,"data":"22222222222222222", replaceEnd: true},
+            { "start": 41, "end": 41, "data": "1111111" },
+            { "start": 35, "end": 41, "data": "22222222222222222", replaceEnd: true },
         ]
     );
 
     function test(finalText, advancedChanges, rootChanges) {
         let cur = text;
-        for(const change of advancedChanges) {
+        for (const change of advancedChanges) {
             cur = cur.substring(0, change.start) + change.data + cur.substring(change.end);
         }
 
         if (cur !== finalText) console.error("Advanced values are wrong");
 
         const revertedClone = structuredClone(advancedChanges);
-        for(let i = revertedClone.length - 1; i > 0; i--) {
-            for(let j = i - 1; j >= 0; j--) {
+        for (let i = revertedClone.length - 1; i > 0; i--) {
+            for (let j = i - 1; j >= 0; j--) {
                 revertedClone[i] = revertChangeBackward(revertedClone[j], revertedClone[i]);
             }
         }
@@ -1311,8 +1369,8 @@ function changeEditorText(editor, source, rootChangesPackages) {
         } else console.log("%cRevert passed", "background: green;color:white");
 
         const advancedClone = structuredClone(rootChanges);
-        for(let i = 1; i < advancedClone.length; i++) {
-            for(let j = 0; j < i; j++) {
+        for (let i = 1; i < advancedClone.length; i++) {
+            for (let j = 0; j < i; j++) {
                 advancedClone[i] = advanceChangeForward(advancedClone[j], advancedClone[i]);
             }
         }
@@ -1326,7 +1384,7 @@ function changeEditorText(editor, source, rootChangesPackages) {
 });
 
 Object.assign(globalThis.String.prototype, {
-    str: function(change) {
+    str: function (change) {
         return this.substring(0, change.start) + change.data + this.substring(change.end);
     }
 })
