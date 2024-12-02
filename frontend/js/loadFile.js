@@ -560,6 +560,7 @@ async function createDirectory(directory, fileNames, path) {
     if (directory.name == "node_modules") return;
     if (directory.name == "venv") return;
     if (directory.name == ".idea") return;
+    if (directory.name == ".ipynb_checkpoints") return;
 
     for await (const entry of directory.values()) {
         await recurseSubFiles(entry, fileNames, `${path}/${directory.name}`);
