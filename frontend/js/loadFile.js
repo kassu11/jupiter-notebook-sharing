@@ -1,3 +1,4 @@
+import "./shortcuts";
 import socketIO from "socket.io-client";
 import { api } from "./api";
 import * as monaco from 'monaco-editor';
@@ -317,6 +318,8 @@ function socketJoin(key) {
 
                 if (activeCellElem === current) current.after(nextCell);
                 else nextCell.before(current);
+
+                scrollToCell(activeCellElem);
             }
             [fileData.data.cells[cellIndex - 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex - 1]]
         } else if (change.type === "moveDown") {
@@ -327,6 +330,8 @@ function socketJoin(key) {
 
                 if (activeCellElem === current) current.before(prevCell);
                 else prevCell.after(current);
+
+                scrollToCell(activeCellElem);
             }
 
             [fileData.data.cells[cellIndex + 1], fileData.data.cells[cellIndex]] = [fileData.data.cells[cellIndex], fileData.data.cells[cellIndex + 1]]
@@ -340,6 +345,11 @@ function socketJoin(key) {
             }
         }
     });
+
+    function scrollToCell(cellElem) {
+        if (!cellElem) return;
+        cellElem?.scrollIntoView();
+    }
 
     socket.on(`fileUpdates${key}`, changePackage => {
         const unappliedChanges = allUnappliedChanges[key + changePackage.filename][changePackage.cel].unappliedChanges;
@@ -495,7 +505,7 @@ function updateUserIcons() {
         div.textContent = user.username.substring(0, 15);
         div.classList.add(`user-color-${user.color}`);
         div.addEventListener("click", () => {
-            const fileData = files[user.key][user.filename];
+            const fileData = files[user.key]?.[user.filename];
             if (!fileData) return;
             if (currentFileName !== user.filename) displayFileData(fileData);
             if (user.cel !== -1) user.scrollToCursor?.();
@@ -636,22 +646,26 @@ function addCellElement(cell, fileData, cellDomPosition = { type: "append", elem
     buttonContainer.classList.add("button-container");
     const upButton = document.createElement("button");
     upButton.textContent = "Up";
+    upButton.id = "cell-up";
     upButton.addEventListener("click", () => {
         socket.emit("cellChange", { type: "moveUp", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
     const downButton = document.createElement("button");
     downButton.textContent = "Down";
+    downButton.id = "cell-down";
     downButton.addEventListener("click", () => {
         socket.emit("cellChange", { type: "moveDown", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
 
     const addButton = document.createElement("button");
     addButton.textContent = "Add";
+    addButton.id = "cell-add";
     addButton.addEventListener("click", () => {
         socket.emit("cellChange", { type: "add", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
     const deleteButton = document.createElement("button");
     deleteButton.textContent = "Delete";
+    deleteButton.id = "cell-delete";
     deleteButton.addEventListener("click", () => {
         socket.emit("cellChange", { type: "delete", cel: cell.id, filename: fileData.name, key: fileData.key });
     });
