@@ -1017,8 +1017,6 @@ function changeEditorText(editor, source, rootChangesPackages) {
         }
     }
 
-    if (rootChangesPackages[0]?.filename !== currentFileName) return;
-
     for (const change of advancedClone) {
         source = source.substring(0, change.start) + change.data + source.substring(change.end);
     }
